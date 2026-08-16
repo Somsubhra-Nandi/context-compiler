@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Rust
+target/
+Cargo.lock.bak
+
+# HydraDB (external, cloned separately at ~/hydradb)
+hydradb/
+
+# Logs
+*.log
+/tmp/
+*.tmp
+
+# OS
+.DS_Store
