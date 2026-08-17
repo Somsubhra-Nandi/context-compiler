@@ -88,6 +88,30 @@ def load_sidecar(
     return table
 
 
+def load_degrees(
+    edges_path: str | Path, edge_types: tuple[str, ...] | None = None
+) -> dict[int, int]:
+    """Out-degree per symbol, for Sec 6.3's ``idf`` hub suppression.
+
+    Another scalar table, loaded application-side for the same reason as the
+    rest of the sidecar: a whole-graph degree count does not survive the
+    engine's deadline (A2.3), and every ranking decision needs it.
+
+    ``edge_types`` defaults to every relation in the file. Passing
+    ``HARD_EDGES`` restricts it to relations that actually propagate.
+    """
+    degrees: dict[int, int] = {}
+    keep = set(edge_types) if edge_types else None
+    with open(edges_path, "rb") as fh:
+        for raw in fh:
+            rec = json.loads(raw)
+            if keep is not None and rec["type"] not in keep:
+                continue
+            src = rec["src"]
+            degrees[src] = degrees.get(src, 0) + 1
+    return degrees
+
+
 def read_repr_text(path: str | Path, offset: TextOffset) -> dict:
     """Read one symbol record back from disk by byte offset."""
     with open(path, "rb") as fh:

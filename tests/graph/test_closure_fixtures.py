@@ -310,12 +310,19 @@ def test_empty_seeds_returns_empty():
     assert expand.calls == []
 
 
-def test_profile_parameter_is_accepted_and_ignored():
-    """Item 5 owns profiles; Item 4 must not silently apply one."""
-    expand = stub_expand([(1, "CALLS", 2)])
-    a = closure({1: L3}, expand)
-    b = closure({1: L3}, stub_expand([(1, "CALLS", 2)]), profile=object())
-    assert a.levels == b.levels
+def test_profile_none_means_the_unadjusted_table():
+    """Item 4's behaviour is preserved: no profile == P3's level assignment.
+
+    Item 4 asserted `profile` was accepted and ignored. Item 5 wires it up, so
+    the guarantee that replaces that one is that `None` still applies the Sec 4
+    table verbatim, and that it agrees with P3.
+    """
+    from context_compiler.graph.profiles import P3
+
+    edges = [(1, "CALLS", 2), (2, "CALLS", 3)]
+    a = closure({1: L3}, stub_expand(edges))
+    b = closure({1: L3}, stub_expand(edges), profile=P3)
+    assert a.levels == b.levels == {1: L3, 2: L2, 3: L1}
 
 
 @pytest.mark.parametrize("edge_type", HARD_EDGES)

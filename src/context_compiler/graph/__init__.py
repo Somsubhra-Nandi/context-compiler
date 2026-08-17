@@ -1,4 +1,18 @@
-"""Graph layer: ingest (Item 3), sidecar, frontier expansion and fixpoint (Item 4)."""
+"""Graph layer: ingest (Item 3), sidecar, expansion and fixpoint (Item 4),
+budget admission and closure-preserving packing (Item 5)."""
+from .budget import (
+    HEADER_TOKENS,
+    HINT_RESERVE,
+    CostState,
+    HintIndex,
+    cost,
+    identity_hints,
+    is_closed,
+    mandatory_identities,
+    refs_at,
+    source_tokens,
+    unclosed_edges,
+)
 from .client import BatchStats, GraphClient, connect
 from .closure import (
     PROPAGATION,
@@ -6,40 +20,123 @@ from .closure import (
     Level,
     Reason,
     closure,
+    induced_delta,
     source_cost,
     L0,
     L1,
     L2,
     L3,
 )
-from .expand import HARD_EDGES, ExpandStats, Expander, expected_round_trips
-from .sidecar import SymbolMeta, TextOffset, load_sidecar, read_repr_text, sidecar_bytes
+from .compile import (
+    EXCEEDED,
+    OK,
+    CompileStats,
+    Compiler,
+    Context,
+    compile_context,
+)
+from .expand import (
+    HARD_EDGES,
+    CachingExpander,
+    EnvelopeMiss,
+    ExpandStats,
+    Expander,
+    FrozenExpander,
+    ReverseReader,
+    expected_round_trips,
+)
+from .pack import (
+    CANDIDATE_SOURCES,
+    Candidate,
+    CandidateSource,
+    DiscoveryContext,
+    PackReport,
+    build_candidates,
+    idf,
+    pack,
+    relevance,
+)
+from .profiles import P0, P1, P2, P3, PROFILES, Profile
+from .sidecar import (
+    SymbolMeta,
+    TextOffset,
+    load_degrees,
+    load_sidecar,
+    read_repr_text,
+    sidecar_bytes,
+)
 
 # `ingest` is deliberately NOT imported here: it is the `python -m` entry point,
 # and importing it from the package __init__ makes runpy warn about executing a
 # module that is already in sys.modules.
 
 __all__ = [
+    # client
     "BatchStats",
     "GraphClient",
     "connect",
+    # closure
     "PROPAGATION",
     "ClosureResult",
     "Level",
     "Reason",
     "closure",
+    "induced_delta",
     "source_cost",
     "L0",
     "L1",
     "L2",
     "L3",
+    # expansion
     "HARD_EDGES",
+    "CachingExpander",
+    "EnvelopeMiss",
     "ExpandStats",
     "Expander",
+    "FrozenExpander",
+    "ReverseReader",
     "expected_round_trips",
+    # sidecar
     "SymbolMeta",
     "TextOffset",
+    "load_degrees",
     "load_sidecar",
     "read_repr_text",
     "sidecar_bytes",
+    # profiles
+    "P0",
+    "P1",
+    "P2",
+    "P3",
+    "PROFILES",
+    "Profile",
+    # cost model
+    "HEADER_TOKENS",
+    "HINT_RESERVE",
+    "CostState",
+    "HintIndex",
+    "cost",
+    "identity_hints",
+    "is_closed",
+    "mandatory_identities",
+    "refs_at",
+    "source_tokens",
+    "unclosed_edges",
+    # packing
+    "CANDIDATE_SOURCES",
+    "Candidate",
+    "CandidateSource",
+    "DiscoveryContext",
+    "PackReport",
+    "build_candidates",
+    "idf",
+    "pack",
+    "relevance",
+    # admission
+    "EXCEEDED",
+    "OK",
+    "CompileStats",
+    "Compiler",
+    "Context",
+    "compile_context",
 ]

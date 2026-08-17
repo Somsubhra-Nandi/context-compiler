@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Callable, Iterable, Mapping, NamedTuple
+from typing import Callable, Iterable, Mapping, NamedTuple, Protocol
 
 from .expand import HARD_EDGES
 
@@ -84,27 +84,33 @@ class ClosureResult:
 
 ExpandFn = Callable[[list[int]], Iterable[tuple[int, str, int]]]
 
+
+class ProfileLike(Protocol):
+    """Sec 6.1's cap on a required level. See ``profiles.Profile``."""
+
+    def adjust(self, edge_type: str, required: Level) -> Level: ...
+
+
 MAX_HOPS = 2  # structural bound from I1, not a cutoff
 
 
-def closure(
-    seeds: Mapping[int, Level],
+def _run_hops(
+    level: dict[int, Level],
+    frontier: list[int],
     expand: ExpandFn,
-    profile: object | None = None,
-) -> ClosureResult:
-    """Least fixpoint of the propagation rules over ``seeds``.
+    profile: ProfileLike | None,
+    provenance: dict[int, list[Reason]],
+    max_hops: int = MAX_HOPS,
+) -> tuple[int, int]:
+    """Drive the fixpoint from ``frontier``, mutating ``level`` in place.
 
-    ``profile`` is accepted and ignored -- profile-adjusted levels are Item 5.
-    TODO(item-5): apply ``profile.adjust(edge_type, required)`` here once
-    Sec 6.1's monotone profile family exists.
+    Shared by the from-scratch ``closure()`` and the incremental
+    ``induced_delta()`` so a bundle can never diverge from a full recomputation.
+    Returns ``(hops_run, edges_examined)``.
     """
-    level: dict[int, Level] = {n: Level(lv) for n, lv in seeds.items()}
-    provenance: dict[int, list[Reason]] = defaultdict(list)
-    frontier = [n for n, lv in level.items() if lv > L1]
-
     hops = 0
     examined = 0
-    for _hop in range(MAX_HOPS):
+    for _hop in range(max_hops):
         if not frontier:
             break
         hops += 1
@@ -115,19 +121,40 @@ def closure(
             if rules is None:
                 # INHERITS_FROM and evidence relations never propagate (Sec 4).
                 continue
-            required = rules[level[src]]
+            source_level = level[src]
+            required = rules[source_level]
+            if profile is not None:
+                required = profile.adjust(edge_type, required)
             if required > level.get(dst, L0):
                 level[dst] = required  # levels only ever rise
                 provenance[dst].append(
                     Reason(
                         via=src,
                         edge=edge_type,
-                        rule=f"{edge_type}({level[src].name})->{required.name}",
+                        rule=f"{edge_type}({source_level.name})->{required.name}",
                     )
                 )
                 if required > L1:
                     next_frontier.append(dst)
         frontier = next_frontier
+    return hops, examined
+
+
+def closure(
+    seeds: Mapping[int, Level],
+    expand: ExpandFn,
+    profile: ProfileLike | None = None,
+) -> ClosureResult:
+    """Least fixpoint of the profile-adjusted propagation rules over ``seeds``.
+
+    ``profile`` caps each required level per Sec 6.1; ``None`` means P3-like
+    behaviour, the unadjusted Sec 4 table.
+    """
+    level: dict[int, Level] = {n: Level(lv) for n, lv in seeds.items()}
+    provenance: dict[int, list[Reason]] = defaultdict(list)
+    frontier = [n for n, lv in level.items() if lv > L1]
+
+    hops, examined = _run_hops(level, frontier, expand, profile, provenance)
 
     return ClosureResult(
         levels=level,
@@ -136,6 +163,42 @@ def closure(
         hops_run=hops,
         edges_examined=examined,
     )
+
+
+def induced_delta(
+    levels: Mapping[int, Level],
+    raised: Mapping[int, Level],
+    expand: ExpandFn,
+    profile: ProfileLike | None = None,
+) -> tuple[dict[int, Level], dict[int, list[Reason]]]:
+    """The incremental mandatory closure induced by raising ``raised``.
+
+    ``levels`` must already be closed. Because the rules are monotone and
+    ``levels`` is the least fixpoint above its own seeds, the least fixpoint
+    above ``levels | raised`` equals the from-scratch closure of
+    ``seeds | raised`` -- so seeding the frontier with only the newly raised
+    nodes is exact, not an approximation. This is what makes Sec 6.3's bundle
+    arithmetic affordable: it costs O(|delta|), not O(|closure|).
+
+    Returns ``(delta, provenance)`` where ``delta`` holds every node whose
+    level rose, at its new level. This *is* the I6 bundle.
+    """
+    work: dict[int, Level] = dict(levels)
+    provenance: dict[int, list[Reason]] = defaultdict(list)
+
+    frontier: list[int] = []
+    for node, lv in raised.items():
+        lv = Level(lv)
+        if lv <= work.get(node, L0):
+            continue
+        work[node] = lv
+        if lv > L1:
+            frontier.append(node)
+
+    _run_hops(work, frontier, expand, profile, provenance)
+
+    delta = {n: lv for n, lv in work.items() if lv > levels.get(n, L0)}
+    return delta, dict(provenance)
 
 
 def source_cost(result: ClosureResult, sidecar: Mapping[int, object]) -> int:
