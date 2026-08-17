@@ -9,15 +9,11 @@ Text comes from the ``symbols.jsonl`` byte-offset index, never from the graph
 (Amendment A2.1).
 """
 from .render import (
-    FRAMING_FIXED,
-    FRAMING_PER_EMITTED,
-    FRAMING_PER_FILE,
     EmittedContext,
     ProvenanceStyle,
     RenderedBlock,
     SectionTokens,
     emit,
-    framing_allowance,
     split_class_shell,
     split_imports,
     unresolved_references,
@@ -33,9 +29,6 @@ from .source import (
 )
 
 __all__ = [
-    "FRAMING_FIXED",
-    "FRAMING_PER_EMITTED",
-    "FRAMING_PER_FILE",
     "EmittedContext",
     "RenderedBlock",
     "MappingTextSource",
@@ -46,7 +39,6 @@ __all__ = [
     "SymbolRecord",
     "TextSource",
     "emit",
-    "framing_allowance",
     "load_offsets",
     "source_from_symbols",
     "split_class_shell",

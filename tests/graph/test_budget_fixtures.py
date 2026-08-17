@@ -13,7 +13,9 @@ import random
 import pytest
 
 from context_compiler.graph.budget import (
-    HEADER_TOKENS,
+    FRAMING_PER_EMITTED,
+    FRAMING_PER_FILE,
+    FRAMING_SAFETY,
     HINT_RESERVE,
     CostState,
     cost,
@@ -60,6 +62,12 @@ from context_compiler.graph.sidecar import SymbolMeta
 # -- fixture graph builders ---------------------------------------------
 
 
+#: Amendment A4.1's framing term, applied here exactly as `graph.budget.cost()`
+#: applies it, so exact-value assertions stay honest about what they're testing.
+def framing(n_emitted: int, n_files: int = 1) -> int:
+    return FRAMING_PER_EMITTED * n_emitted + FRAMING_PER_FILE * n_files + FRAMING_SAFETY
+
+
 def meta(
     node: int,
     t2: int = 10,
@@ -69,10 +77,12 @@ def meta(
     ident: int = 8,
     prov: int = 5,
     kind: str = "function",
+    file: str = "pkg/mod.py",
 ) -> SymbolMeta:
     return SymbolMeta(
         fqn=f"pkg.sym{node}",
         kind=kind,
+        file=file,
         repr_L2_tokens=t2,
         repr_L3_tokens=t3,
         repr_L2_refs=r2,
@@ -240,11 +250,25 @@ def test_cost_charges_source_provenance_identities_and_header():
         9: meta(9, ident=7),  # never emitted: L1-mandatory
     }
     levels = {1: L3, 2: L2, 3: L1}
-    #  src   100 (node 1 at L3) + 10 (node 2 at L2)
-    #  prov    5 + 4
-    #  ident   7 (node 9, referenced by both 1 and 2, charged once)
-    #  header 40
-    assert cost(levels, sidecar) == 100 + 10 + 5 + 4 + 7 + HEADER_TOKENS
+    #  src      100 (node 1 at L3) + 10 (node 2 at L2)
+    #  prov       5 + 4
+    #  ident      7 (node 9, referenced by both 1 and 2, charged once)
+    #  framing  2 emitted (1, 2), 1 file
+    assert cost(levels, sidecar) == 100 + 10 + 5 + 4 + 7 + framing(2)
+
+
+def test_cost_charges_a_framing_term_per_distinct_file():
+    """A4.1: framing is keyed on emitted-symbol *and* distinct-file counts."""
+    sidecar = {
+        1: meta(1, t2=10, prov=0, file="pkg/a.py"),
+        2: meta(2, t2=10, prov=0, file="pkg/a.py"),
+        3: meta(3, t2=10, prov=0, file="pkg/b.py"),
+    }
+    same_file = cost({1: L2, 2: L2}, sidecar)
+    two_files = cost({1: L2, 3: L2}, sidecar)
+    # Both emit 2 symbols and the same total source tokens; only the file
+    # count differs, so the whole difference is one FRAMING_PER_FILE charge.
+    assert two_files - same_file == FRAMING_PER_FILE
 
 
 def test_L1_lattice_members_cost_zero():
@@ -257,15 +281,15 @@ def test_an_emitted_node_is_not_charged_as_its_own_identity():
     sidecar = {1: meta(1, t3=100, r3=(2,)), 2: meta(2, t2=10, ident=8)}
     with_ident = cost({1: L3, 2: L1}, sidecar)
     emitted = cost({1: L3, 2: L2}, sidecar)
-    assert with_ident == 100 + 5 + 8 + HEADER_TOKENS
-    assert emitted == 100 + 10 + 5 + 5 + HEADER_TOKENS  # ident gone, decl + prov in
+    assert with_ident == 100 + 5 + 8 + framing(1)  # only node 1 emitted
+    assert emitted == 100 + 10 + 5 + 5 + framing(2)  # ident gone, decl + prov in
 
 
 def test_a_reference_outside_the_closure_is_still_charged():
     """L1-mandatory is not a subset of the lattice (Sec 1.1)."""
     sidecar = {1: meta(1, t3=100, r3=(77,)), 77: meta(77, ident=12)}
     assert 77 not in {1: L3}
-    assert cost({1: L3}, sidecar) == 100 + 5 + 12 + HEADER_TOKENS
+    assert cost({1: L3}, sidecar) == 100 + 5 + 12 + framing(1)
 
 
 def test_mandatory_identities_excludes_emitted_nodes():
@@ -449,9 +473,10 @@ def test_shared_dependencies_make_the_second_bundle_cheaper():
     assert first == {20: L2, 50: L1}
     assert second == {21: L2}
     assert cost_second < cost_first
-    # The first pays for node 50's identity line; the second does not.
-    assert cost_first == 10 + 5 + 6
-    assert cost_second == 10 + 5
+    # Both newly emit exactly one node in an already-counted file, so both pay
+    # one FRAMING_PER_EMITTED; only the first pays for node 50's identity line.
+    assert cost_first == 10 + 5 + 6 + FRAMING_PER_EMITTED
+    assert cost_second == 10 + 5 + FRAMING_PER_EMITTED
 
     # And the saving is exactly the shared dependency.
     assert cost_first - cost_second == sidecar[50].identity_tokens
@@ -541,8 +566,8 @@ def test_pack_admits_the_best_value_first():
     ]
     report = pack(1_000, levels, {}, cands, state, cache.frozen(), P3)
     assert [a.node for a in report.admitted] == [21, 20]
-    assert report.admitted[0].delta_cost == 10 + 5 + 1
-    assert report.admitted[1].delta_cost == 10 + 5 + 200
+    assert report.admitted[0].delta_cost == 10 + 5 + 1 + FRAMING_PER_EMITTED
+    assert report.admitted[1].delta_cost == 10 + 5 + 200 + FRAMING_PER_EMITTED
 
 
 def test_pack_never_overruns_the_budget_by_one_token():
@@ -563,16 +588,17 @@ def test_pack_never_overruns_the_budget_by_one_token():
     source = StaticCallerSource()
     cands = [Candidate(20, source, (1,), 1.0), Candidate(21, source, (1,), 0.9)]
 
-    # Exactly one bundle (10 decl + 5 prov = 15) fits in 15 tokens.
-    report = pack(15, levels, {}, cands, state, cache.frozen(), P3)
+    # Exactly one bundle (10 decl + 5 prov + 6 framing = 21) fits in 21 tokens.
+    bundle_cost = 10 + 5 + FRAMING_PER_EMITTED
+    report = pack(bundle_cost, levels, {}, cands, state, cache.frozen(), P3)
     assert report.admitted_count == 1
-    assert report.spent == 15
-    assert state.total() == before + 15
+    assert report.spent == bundle_cost
+    assert state.total() == before + bundle_cost
     assert report.remaining == 0
 
     # One token short: nothing is admitted at all.
     levels2, state2 = {1: L3}, CostState({1: L3}, sidecar)
-    report2 = pack(14, levels2, {}, list(cands), state2, cache.frozen(), P3)
+    report2 = pack(bundle_cost - 1, levels2, {}, list(cands), state2, cache.frozen(), P3)
     assert report2.admitted_count == 0
     assert state2.total() == before
 
@@ -851,7 +877,9 @@ def test_pool_cap_does_not_disable_per_iteration_reranking():
         state, cache.frozen(), P3,
     )
     # The shared dependency is paid once: the second bundle is cheaper.
-    assert [a.delta_cost for a in report.admitted] == [21, 15]
+    assert [a.delta_cost for a in report.admitted] == [
+        21 + FRAMING_PER_EMITTED, 15 + FRAMING_PER_EMITTED
+    ]
 
 
 def test_exceeded_suggestion_names_the_binding_constraint():

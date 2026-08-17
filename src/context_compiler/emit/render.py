@@ -15,16 +15,16 @@ each one is a rule this module follows rather than a style preference:
   count it was given -- silently dropping one is the failure mode the assertion
   exists to make impossible.
 
-* **Framing is minimised, and it still does not fit.** I4 requires
-  ``actual_emitted_tokens <= budgeted_tokens``. Two real sources of slack fund
-  framing -- import and class-header hoisting (Sec 7.2: "emission-time dedup can
-  only shrink output"), and the ``prov`` term charged for seeds, which by Sec 7.4
-  get no trailer -- and they are not enough. Measured over 50 Django contexts the
-  residue is ``FRAMING_PER_EMITTED`` per symbol plus ``FRAMING_PER_FILE`` per file
-  group, because ``cost()`` charges a flat 40 for "the context header" and nothing
-  for the per-file structure Sec 7.1's grouping requires. That is an under-count
-  in Sec 6.2, reported in docs/spikes/emit-item-6-results.md rather than papered
-  over here, and it is why the framing below is as spare as it is.
+* **Framing is minimised, and Amendment A4.1 is what makes it fit.** I4 requires
+  ``actual_emitted_tokens <= budgeted_tokens``. Two real sources of slack fund it
+  -- import and class-header hoisting (Sec 7.2: "emission-time dedup can only
+  shrink output"), and the ``prov`` term charged for seeds, which by Sec 7.4 get
+  no trailer -- but Item 6 measured them as not enough on their own: ``cost()``
+  charged a flat 40 for "the context header" and nothing for the per-file
+  structure Sec 7.1's grouping produces, so 11 of 50 Django contexts came in over
+  budget. A4.1 fixed the under-count in ``graph.budget.cost()`` directly (a
+  framing term keyed on emitted-symbol and distinct-file counts), which is why
+  emission itself does not need a separate framing budget any more.
 
 Everything structural is a ``#`` comment, so a file group is valid Python and an
 L3 block plus its class shell parses on its own (``RenderedBlock.parse_unit``).
@@ -55,24 +55,6 @@ IDENTITY_HINTS = "identity hints"
 
 #: Provenance edges the packer writes carry this prefix (``pack.pack``).
 OPTIONAL_EDGE_PREFIX = "OPTIONAL:"
-
-#: The measured framing envelope -- model-visible structure that Sec 6.2's
-#: ``cost()`` does not charge for. Fitted over 50 Django contexts so that no
-#: context exceeds it (results doc Sec 4); the tight fit was 6 per emitted symbol
-#: plus 12.5 per file group, and ``FRAMING_FIXED`` covers the three-line header
-#: and the section markers, which do not scale with the context.
-#:
-#: **This is a measurement, not a budget.** Nothing enforces it at compile time.
-#: It exists so a regression that makes framing meaningfully more expensive fails
-#: a test, and so the recommended amendment has a number attached.
-FRAMING_PER_EMITTED = 6
-FRAMING_PER_FILE = 13
-FRAMING_FIXED = 40
-
-
-def framing_allowance(emitted: int, files: int) -> int:
-    """The measured envelope for structure ``cost()`` does not charge for."""
-    return FRAMING_FIXED + FRAMING_PER_EMITTED * emitted + FRAMING_PER_FILE * files
 
 
 class ProvenanceStyle:
@@ -308,15 +290,6 @@ class EmittedContext:
     @property
     def margin_fraction(self) -> float:
         return self.token_margin / self.budgeted_tokens if self.budgeted_tokens else 0.0
-
-    @property
-    def framing_allowance(self) -> int:
-        """The measured envelope for structure ``cost()`` does not charge for."""
-        return framing_allowance(len(self.order), self.files)
-
-    @property
-    def within_framing_allowance(self) -> bool:
-        return self.token_margin <= self.framing_allowance
 
     def __str__(self) -> str:  # pragma: no cover - reporting only
         return (

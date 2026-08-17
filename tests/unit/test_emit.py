@@ -61,6 +61,7 @@ class Sym:
         return SymbolMeta(
             fqn=self.fqn,
             kind=self.kind,
+            file=self.file,
             repr_L2_tokens=count_tokens(self.l2),
             repr_L3_tokens=count_tokens(self.l3),
             repr_L2_refs=self.r2,
@@ -466,28 +467,21 @@ def test_dedup_only_ever_shrinks(repo):
 
 # -- I4 ------------------------------------------------------------------
 #
-# `token_margin <= 0` does NOT hold, and the cause is upstream of emission. See
-# docs/spikes/emit-item-6-results.md Sec 4: Sec 6.2's `cost()` charges a flat
-# `HEADER_TOKENS = 40` for the context header and nothing at all for the rest of
-# the model-visible structure -- the per-file group headers Sec 7.1's grouping
-# requires, the section markers, and the part of each block header that does not
-# fit inside `provenance_tokens`. Measured on 50 Django contexts: median +341
-# tokens (+4.7%), max +622 (+7.9%).
-#
-# These two tests are `xfail(strict=True)` rather than deleted or loosened, so
-# they turn into a hard pass the moment a framing term lands in `cost()` and a
-# hard failure if someone marks them fixed without fixing them.
+# `token_margin <= 0` is a hard invariant as of Amendment A4.1: `cost()` now
+# charges a framing term keyed on emitted-symbol and distinct-file counts
+# instead of a flat `HEADER_TOKENS = 40`, which is what Item 6 found under-
+# counted the per-file group headers Sec 7.1's grouping requires (11 of 50
+# Django contexts came in over budget; see docs/spikes/emit-item-6-results.md
+# Sec 4 and docs/specs/amendment-a4.md). These were `xfail(strict=True)` before
+# the fix landed.
 
 
-
-@pytest.mark.xfail(strict=True, reason="I4 under-count in Sec 6.2 cost(); see results doc Sec 4")
 def test_token_margin_is_not_positive(repo):
     sidecar, source = repo
     out = emit(compile_fixture(sidecar), source, sidecar)
     assert out.token_margin <= 0, (out.tokens, out.budgeted_tokens)
 
 
-@pytest.mark.xfail(strict=True, reason="I4 under-count in Sec 6.2 cost(); see results doc Sec 4")
 def test_token_margin_is_not_positive_multi_seed(repo):
     sidecar, source = repo
     ctx = compile_fixture(sidecar, seeds=(REFRESH, LOGIN), budget=3000)
@@ -495,28 +489,18 @@ def test_token_margin_is_not_positive_multi_seed(repo):
     assert out.token_margin <= 0, (out.tokens, out.budgeted_tokens)
 
 
-def test_framing_overhead_stays_within_the_measured_bound(repo):
-    """The bound the amendment would charge. A regression here is a real one."""
-    sidecar, source = repo
-    out = emit(compile_fixture(sidecar), source, sidecar)
-    assert out.token_margin <= out.framing_allowance, (
-        out.token_margin,
-        len(out.order),
-    )
-
-
 @pytest.mark.parametrize("budget", [1200, 1600, 2000, 4000, 8000])
-def test_framing_overhead_holds_across_budgets(repo, budget):
+def test_token_margin_is_not_positive_across_budgets(repo, budget):
     sidecar, source = repo
     out = emit(compile_fixture(sidecar, budget=budget), source, sidecar)
-    assert out.token_margin <= out.framing_allowance, (budget, out.token_margin)
+    assert out.token_margin <= 0, (budget, out.token_margin)
 
 
 @pytest.mark.parametrize("profile", [P3, P2, P1, P0])
-def test_framing_overhead_holds_on_every_profile(repo, profile):
+def test_token_margin_is_not_positive_on_every_profile(repo, profile):
     sidecar, source = repo
     out = emit(compile_fixture(sidecar, profiles=(profile,)), source, sidecar)
-    assert out.token_margin <= out.framing_allowance, (profile.name, out.token_margin)
+    assert out.token_margin <= 0, (profile.name, out.token_margin)
 
 
 def test_multi_seed_renders_both_seeds(repo):
@@ -524,7 +508,7 @@ def test_multi_seed_renders_both_seeds(repo):
     ctx = compile_fixture(sidecar, seeds=(REFRESH, LOGIN), budget=3000)
     out = emit(ctx, source, sidecar)
     assert set(out.seeds) == {REFRESH, LOGIN}
-    assert out.token_margin <= out.framing_allowance
+    assert out.token_margin <= 0
 
 
 # -- the assembled artifact still parses ---------------------------------

@@ -19,6 +19,7 @@ class SymbolMeta(NamedTuple):
 
     fqn: str
     kind: str
+    file: str
     repr_L2_tokens: int
     repr_L3_tokens: int
     repr_L2_refs: tuple[int, ...]
@@ -75,6 +76,7 @@ def load_sidecar(
         table[nid] = SymbolMeta(
             fqn=rec["fqn"],
             kind=sys.intern(rec["kind"]),
+            file=sys.intern(rec["file"]),
             repr_L2_tokens=rec["repr_L2_tokens"],
             repr_L3_tokens=rec["repr_L3_tokens"],
             repr_L2_refs=_refs(rec["repr_L2_refs"]),
@@ -149,7 +151,7 @@ def sidecar_bytes(table: dict[int, SymbolMeta]) -> int:
 
     for key, meta in table.items():
         total += add(key) + add(meta)
-        total += add(meta.fqn) + add(meta.kind)
+        total += add(meta.fqn) + add(meta.kind) + add(meta.file)
         for refs in (meta.repr_L2_refs, meta.repr_L3_refs):
             total += add(refs)
             for r in refs:

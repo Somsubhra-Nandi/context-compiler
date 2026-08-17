@@ -6,11 +6,11 @@ sub-second. ``CC_TRIALS`` bounds the number of compiled contexts (default 50,
 which is what the results doc quotes).
 
 The one figure this file exists to produce is the I4 margin distribution:
-``actual_emitted_tokens - budgeted_tokens`` over real compiled contexts. It is
-**positive**, and the cause is upstream of emission -- see
-docs/spikes/emit-item-6-results.md Sec 4. The margin assertion is therefore
-against the measured framing envelope, and a strict-xfail test records the I4
-violation itself so it cannot be quietly forgotten.
+``actual_emitted_tokens - budgeted_tokens`` over real compiled contexts. Item 6
+found it **positive** on 11 of 50 contexts, with the cause upstream of emission
+-- see docs/spikes/emit-item-6-results.md Sec 4. Amendment A4.1 fixed the
+under-count in ``graph.budget.cost()`` directly, so ``token_margin <= 0`` is now
+a hard invariant here rather than an xfail.
 """
 from __future__ import annotations
 
@@ -79,19 +79,6 @@ def test_contexts_were_produced(contexts):
     assert all(e.tokens > 0 for _c, e in contexts)
 
 
-def test_margin_is_within_the_measured_framing_envelope(contexts):
-    """The bound emission is actually held to until Sec 6.2 charges for framing."""
-    over = [
-        (e.token_margin, e.framing_allowance, len(e.order), e.files)
-        for _c, e in contexts
-        if not e.within_framing_allowance
-    ]
-    assert not over, over
-
-
-@pytest.mark.xfail(
-    strict=True, reason="I4 under-count in Sec 6.2 cost(); see results doc Sec 4"
-)
 def test_token_margin_is_not_positive(contexts):
     """I4: budgeted cost must be an upper bound on emitted cost."""
     positive = sorted(

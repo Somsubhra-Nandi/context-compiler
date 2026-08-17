@@ -1,7 +1,9 @@
 """Graph layer: ingest (Item 3), sidecar, expansion and fixpoint (Item 4),
 budget admission and closure-preserving packing (Item 5)."""
 from .budget import (
-    HEADER_TOKENS,
+    FRAMING_PER_EMITTED,
+    FRAMING_PER_FILE,
+    FRAMING_SAFETY,
     HINT_RESERVE,
     CostState,
     HintIndex,
@@ -117,7 +119,9 @@ __all__ = [
     "PROFILES",
     "Profile",
     # cost model
-    "HEADER_TOKENS",
+    "FRAMING_PER_EMITTED",
+    "FRAMING_PER_FILE",
+    "FRAMING_SAFETY",
     "HINT_RESERVE",
     "CostState",
     "HintIndex",

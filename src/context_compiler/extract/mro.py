@@ -43,6 +43,10 @@ def c3_linearize(cls: str, bases: dict[str, list[str]]) -> list[str]:
     return linearize(cls)
 
 
+def _member_name(member: str) -> str:
+    return member.split("(", 1)[0].split(":", 1)[0].strip().split()[-1]
+
+
 def flatten_members(cls: str, bases: dict[str, list[str]], members: dict[str, list[str]]) -> tuple[list[tuple[str, str]], bool]:
     try:
         order = c3_linearize(cls, bases)
@@ -52,8 +56,17 @@ def flatten_members(cls: str, bases: dict[str, list[str]], members: dict[str, li
     flattened: list[tuple[str, str]] = []
     for owner in order:
         for member in members.get(owner, []):
-            name = member.split("(", 1)[0].split(":", 1)[0].strip().split()[-1]
-            if name not in seen:
-                flattened.append((member, owner))
-                seen.add(name)
+            name = _member_name(member)
+            if name in seen:
+                continue
+            # Amendment A4.3: dunders/privates inherited from a base are
+            # operator-overload and internals noise (e.g. Combinable's
+            # __rxor__, bitleftshift) that told a model nothing about the
+            # class doing the work -- 24% of a worked example's budget on
+            # ColPairs/WhereNode alone. A class's own members are never
+            # filtered, regardless of name.
+            if owner != cls and name.startswith("_"):
+                continue
+            flattened.append((member, owner))
+            seen.add(name)
     return flattened, False

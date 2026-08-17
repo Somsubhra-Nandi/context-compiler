@@ -2,11 +2,20 @@
 
 ``cost()`` charges everything the model will see, per I4:
 
-    src    canonical emitted text for every node at L2 or L3
-    prov   the provenance trailer on every emitted node (Sec 7.4)
-    ident  L1-mandatory identity lines -- FQNs that appear textually in
-           emitted text but are not themselves emitted. Never truncated.
-    header 40 tokens of context header
+    src     canonical emitted text for every node at L2 or L3
+    prov    the provenance trailer on every emitted node (Sec 7.4)
+    ident   L1-mandatory identity lines -- FQNs that appear textually in
+            emitted text but are not themselves emitted. Never truncated.
+    framing per-file group headers and section markers Sec 7.1's grouping
+            requires, plus a fixed safety margin (Amendment A4.1)
+
+A flat ``HEADER_TOKENS`` charge under-counted this: Item 6 measured I4 (this
+budget must upper-bound what emission actually renders) violated on 11 of 50
+Django contexts, because nothing charged for the per-file structure Sec 7.1's
+grouping produces. ``FRAMING_PER_EMITTED`` / ``FRAMING_PER_FILE`` were fitted
+against 50 Django contexts as a passive diagnostic before A4.1 wired them into
+admission; ``FRAMING_SAFETY`` replaces the old fixed header charge and absorbs
+tail variance beyond that sample -- see docs/specs/amendment-a4.md.
 
 The three L1 tiers of Sec 1.1 are what v1.2 got wrong, so they are spelled out
 here rather than left implicit:
@@ -42,10 +51,20 @@ from .sidecar import SymbolMeta
 #: Fraction of the budget held back for truncatable L1-hints (Sec 6.2).
 HINT_RESERVE = 0.05
 
-#: Cost of the context header itself. Charged once, per I4 -- the model sees it.
-HEADER_TOKENS = 40
+#: Amendment A4.1's framing term, replacing the flat ``HEADER_TOKENS = 40``
+#: that under-counted Sec 7.1's per-file grouping. Measured against 50 Django
+#: contexts (docs/spikes/emit-item-6-results.md Sec 4); ``FRAMING_SAFETY`` is
+#: the fixed component, raised from the fitted 40 to absorb tail variance
+#: beyond that sample -- see docs/specs/amendment-a4.md.
+FRAMING_PER_EMITTED = 6
+FRAMING_PER_FILE = 13
+FRAMING_SAFETY = 100
 
 EMPTY: tuple[int, ...] = ()
+
+
+def _framing(n_emitted: int, n_files: int) -> int:
+    return FRAMING_PER_EMITTED * n_emitted + FRAMING_PER_FILE * n_files + FRAMING_SAFETY
 
 
 def refs_at(meta: SymbolMeta, level: Level) -> tuple[int, ...]:
@@ -76,6 +95,7 @@ def cost(levels: Mapping[int, Level], sidecar: Mapping[int, SymbolMeta]) -> int:
     prov = 0
     emitted: set[int] = set()
     referenced: set[int] = set()
+    files: set[str] = set()
     for node, level in levels.items():
         meta = sidecar.get(node)
         if meta is None:
@@ -84,13 +104,14 @@ def cost(levels: Mapping[int, Level], sidecar: Mapping[int, SymbolMeta]) -> int:
         if level >= L2:
             prov += meta.provenance_tokens
             emitted.add(node)
+            files.add(meta.file)
         referenced.update(refs_at(meta, level))
     ident = 0
     for node in referenced - emitted:
         meta = sidecar.get(node)
         if meta is not None:
             ident += meta.identity_tokens
-    return src + prov + ident + HEADER_TOKENS
+    return src + prov + ident + _framing(len(emitted), len(files))
 
 
 def mandatory_identities(
@@ -117,7 +138,10 @@ class CostState:
     instead of re-unioning every ref list in the context.
     """
 
-    __slots__ = ("sidecar", "levels", "_emitted", "_refcount", "_src", "_prov", "_ident")
+    __slots__ = (
+        "sidecar", "levels", "_emitted", "_refcount", "_files",
+        "_src", "_prov", "_ident",
+    )
 
     def __init__(
         self, levels: Mapping[int, Level], sidecar: Mapping[int, SymbolMeta]
@@ -126,6 +150,7 @@ class CostState:
         self.levels: dict[int, Level] = {}
         self._emitted: set[int] = set()
         self._refcount: Counter[int] = Counter()
+        self._files: Counter[str] = Counter()
         self._src = 0
         self._prov = 0
         self._ident = 0
@@ -135,7 +160,10 @@ class CostState:
     # -- reading ---------------------------------------------------------
 
     def total(self) -> int:
-        return self._src + self._prov + self._ident + HEADER_TOKENS
+        return (
+            self._src + self._prov + self._ident
+            + _framing(len(self._emitted), len(self._files))
+        )
 
     @property
     def emitted(self) -> set[int]:
@@ -149,10 +177,11 @@ class CostState:
 
     def _terms(
         self, delta: Mapping[int, Level]
-    ) -> tuple[int, int, int, Counter[int]]:
+    ) -> tuple[int, int, int, int, Counter[int], Counter[str]]:
         d_src = 0
         d_prov = 0
         ref_delta: Counter[int] = Counter()
+        file_delta: Counter[str] = Counter()
         rising: dict[int, Level] = {}
 
         for node, new in delta.items():
@@ -167,6 +196,7 @@ class CostState:
             d_src += source_tokens(meta, new) - source_tokens(meta, old)
             if new >= L2 and old < L2:
                 d_prov += meta.provenance_tokens
+                file_delta[meta.file] += 1
             for r in refs_at(meta, old):
                 ref_delta[r] -= 1
             for r in refs_at(meta, new):
@@ -190,16 +220,19 @@ class CostState:
                 d_ident -= meta.identity_tokens
             elif now and not was:
                 d_ident += meta.identity_tokens
-        return d_src, d_prov, d_ident, ref_delta
+
+        d_files = sum(1 for f in file_delta if self._files.get(f, 0) == 0)
+        d_framing = FRAMING_PER_EMITTED * sum(file_delta.values()) + FRAMING_PER_FILE * d_files
+        return d_src, d_prov, d_ident, d_framing, ref_delta, file_delta
 
     def delta_cost(self, delta: Mapping[int, Level]) -> int:
         """Token cost of admitting ``delta``. Pure -- does not mutate."""
-        d_src, d_prov, d_ident, _ = self._terms(delta)
-        return d_src + d_prov + d_ident
+        d_src, d_prov, d_ident, d_framing, _, _ = self._terms(delta)
+        return d_src + d_prov + d_ident + d_framing
 
     def apply(self, delta: Mapping[int, Level]) -> int:
         """Admit ``delta`` and return what it cost."""
-        d_src, d_prov, d_ident, ref_delta = self._terms(delta)
+        d_src, d_prov, d_ident, d_framing, ref_delta, file_delta = self._terms(delta)
         for node, new in delta.items():
             new = Level(new)
             old = self.levels.get(node, L0)
@@ -213,10 +246,11 @@ class CostState:
         for r, n in ref_delta.items():
             if n:
                 self._refcount[r] += n
+        self._files.update(file_delta)
         self._src += d_src
         self._prov += d_prov
         self._ident += d_ident
-        return d_src + d_prov + d_ident
+        return d_src + d_prov + d_ident + d_framing
 
 
 # -- I6 ------------------------------------------------------------------
