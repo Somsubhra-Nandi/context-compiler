@@ -15,6 +15,7 @@ Cargo.lock.bak
 
 # HydraDB (external, cloned separately at ~/hydradb)
 hydradb/
+targets/
 
 # Logs
 *.log

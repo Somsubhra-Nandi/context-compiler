@@ -5,6 +5,7 @@ description = "Context Compiler — Hack Hydra Track 2B"
 requires-python = ">=3.10"
 dependencies = [
     "neo4j>=5.20",
+    "tiktoken>=0.13",
 ]
 
 [project.optional-dependencies]
