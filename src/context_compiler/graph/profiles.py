@@ -46,7 +46,9 @@ class Profile:
 
     ``rank`` orders the family (3 = richest). ``seed_level`` is the level task
     seeds enter the closure at. ``cap_from_L3`` caps hop-1 targets per edge
-    type; ``cap_from_L2`` caps hop-2 targets uniformly.
+    type; ``cap_from_L2`` caps hop-2 targets uniformly. ``label`` is Sec 6.1's
+    display word, which Sec 7's header prints as ``(P3 FULL)`` -- it lives here
+    rather than in emission so there is one spelling of it.
     """
 
     name: str
@@ -54,6 +56,7 @@ class Profile:
     seed_level: Level
     cap_from_L3: Mapping[str, Level]
     cap_from_L2: Level
+    label: str = ""
 
     def adjust(self, edge_type: str, required: Level) -> Level:
         """Lower ``required`` to this profile's cap. Never raises it."""
@@ -75,6 +78,7 @@ def _uniform(level: Level) -> dict[str, Level]:
 
 P3 = Profile(
     name="P3",
+    label="FULL",
     rank=3,
     seed_level=L3,
     cap_from_L3=_uniform(L2),
@@ -83,6 +87,7 @@ P3 = Profile(
 
 P2 = Profile(
     name="P2",
+    label="COMPACT",
     rank=2,
     seed_level=L3,
     cap_from_L3={et: (L2 if et in DIRECT_EDGES else L1) for et in HARD_EDGES},
@@ -91,6 +96,7 @@ P2 = Profile(
 
 P1 = Profile(
     name="P1",
+    label="MINIMAL",
     rank=1,
     seed_level=L3,
     cap_from_L3=_uniform(L1),
@@ -99,6 +105,7 @@ P1 = Profile(
 
 P0 = Profile(
     name="P0",
+    label="FLOOR",
     rank=0,
     seed_level=L2,
     cap_from_L3=_uniform(L1),
