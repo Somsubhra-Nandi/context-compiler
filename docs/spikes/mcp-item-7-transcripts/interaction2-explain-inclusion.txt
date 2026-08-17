@@ -1,0 +1,71 @@
+[tool call: ToolSearch]  input={"query": "explain_inclusion", "max_results": 5}
+
+[assistant]
+It reconnected. Calling `explain_inclusion` now for `Query.add_q` against the context I compiled earlier.
+
+[tool call: mcp__context-compiler__explain_inclusion]  input={"fqn": "django.db.models.sql.query.Query.add_q"}
+
+[tool result block 0]
+no compiled context available yet -- call compile_context first, or pass `task`/`seeds` to this call to compile one
+
+[assistant]
+The previous compiled context didn't carry over the reconnect, so I'll recompile with the same seeds first, then ask for the derivation chain.
+
+[tool call: mcp__context-compiler__explain_inclusion]  input={"fqn": "django.db.models.sql.query.Query.add_q", "seeds": ["QuerySet.filter", "build_filter"]}
+
+[tool result block 0]
+django.db.models.sql.query.Query.add_q  [L1]
+  <- django.db.models.sql.query  CALLS  (rule: CALLS(L2)->L1)
+  <- django.db.models.sql.query.Query.build_filter  OPTIONAL:static_caller  (rule: packed(static_caller)->L2)
+  included because: 1 mandatory rule fired
+  also reached via optional packing (1 bundle step(s))
+  runtime-confirmed: no evidence yet (Item 9)
+
+[tool result block 1]
+{
+  "fqn": "django.db.models.sql.query.Query.add_q",
+  "present": true,
+  "level": "L1",
+  "tokens": 18,
+  "emitted": false,
+  "is_seed": false,
+  "chain": [
+    {
+      "fqn": "django.db.models.sql.query",
+      "edge": "CALLS",
+      "rule": "CALLS(L2)->L1",
+      "depth": 1
+    },
+    {
+      "fqn": "django.db.models.sql.query.Query.build_filter",
+      "edge": "OPTIONAL:static_caller",
+      "rule": "packed(static_caller)->L2",
+      "depth": 2
+    }
+  ],
+  "would_include_via": []
+}
+
+[assistant]
+The derivation chain for `Query.add_q`:
+
+```
+Query.add_q  [level L1]
+  ← django.db.models.sql.query          via CALLS            (rule: CALLS(L2)→L1)
+  ← Query.build_filter                  via OPTIONAL:static_caller  (rule: packed(static_caller)→L2)
+```
+
+Read bottom-up:
+
+1. **`build_filter` is a seed**, so the compiler pulled in `django.db.models.sql.query` (the *module*) as optional context tagged `static_caller` — this is the "dump the rest of the defining class/module for situational context" bundling, not a direct call edge. That's why in the earlier output the whole `Query` class showed up under `--- optional context ---` as a signature-only listing.
+2. From that module-level inclusion, `add_q` gets pulled in one level further via a plain `CALLS` edge at depth 1 (something in that module body calls `add_q`).
+
+Two things worth flagging from the raw result:
+
+- **`present: true` but `emitted: false`** — `add_q` exists in the closure and satisfied an inclusion rule, but wasn't rendered as its own annotated block in the compiled text. It only showed up implicitly, as the one-line signature inside the bundled `Query` class dump (`def add_q(self, q_object, reuse_all=False): ...`).
+- **Don't confuse it with `_add_q`** (no leading underscore stripped) — that's a *different* method, the private one `build_filter` actually calls directly (`return self._add_q(...)` in the body), which is why `_add_q` got its own direct `CALLS` edge straight off `build_filter` and its own full entry in the "dependencies" section. `add_q` is the public wrapper (`add_q` → `_add_q`) that only rode in via the optional class-level bundle, not because `build_filter` calls it.
+
+So: `add_q`'s presence is a side effect of pulling in `Query`'s surrounding module/class context for `build_filter`, not evidence that `build_filter` calls it — `explain_inclusion`'s `runtime-confirmed: no evidence yet` note is the tool itself flagging that this is a static/structural inference, not a confirmed runtime call.
+
+[session summary] turns=4 duration_api_ms=33893 is_error=False
+

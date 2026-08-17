@@ -1,0 +1,614 @@
+[tool call: ToolSearch]  input={"query": "context-compiler", "max_results": 10}
+
+[tool call: mcp__context-compiler__compile_context]  input={"seeds": ["QuerySet.filter", "build_filter"]}
+
+[tool result block 0]
+Compiled context · 24 symbols · 6,932 / 8,000 tokens
+22 declarations · 2 bodies · 27 identities
+Structural closure: complete (P3 FULL)
+
+# --- seeds (2) ---
+# django/db/models/query.py
+
+class QuerySet:
+# filter  [L3, 61t]
+    def filter(self, *args, **kwargs):
+        """
+        Return a new QuerySet instance with the args ANDed to the existing
+        set.
+        """
+        self._not_support_combined_queries("filter")
+        return self._filter_or_exclude(False, args, kwargs)
+
+# django/db/models/sql/query.py
+from collections.abc import Iterable, Iterator, Mapping
+from django.core.exceptions import FieldDoesNotExist, FieldError
+from django.db.models.expressions import (
+    BaseExpression,
+    Col,
+    ColPairs,
+    Exists,
+    F,
+    OuterRef,
+    RawSQL,
+    Ref,
+    ResolvedOuterRef,
+    Value,
+)
+from django.db.models.lookups import Lookup
+from django.db.models.query_utils import (
+    Q,
+    check_rel_lookup_compatibility,
+    refs_expression,
+)
+from django.db.models.sql.constants import INNER, LOUTER, ORDER_DIR, SINGLE
+from django.db.models.sql.datastructures import BaseTable, Empty, Join, MultiJoin
+from django.db.models.sql.where import AND, OR, ExtraWhere, NothingNode, WhereNode
+
+class Query:
+# build_filter  [L3, 1665t]
+    def build_filter(
+        self,
+        filter_expr,
+        branch_negated=False,
+        current_negated=False,
+        can_reuse=None,
+        allow_joins=True,
+        split_subq=True,
+        check_filterable=True,
+        summarize=False,
+        update_join_types=True,
+    ):
+        """
+        Build a WhereNode for a single filter clause but don't add it
+        to this Query. Query.add_q() will then add this filter to the where
+        Node.
+
+        The 'branch_negated' tells us if the current branch contains any
+        negations. This will be used to determine if subqueries are needed.
+
+        The 'current_negated' is used to determine if the current filter is
+        negated or not and this will be used to determine if IS NULL filtering
+        is needed.
+
+        The difference between current_negated and branch_negated is that
+        branch_negated is set on first negation, but current_negated is
+        flipped for each negation.
+
+        Note that add_filter will not do any negating itself, that is done
+        upper in the code by add_q().
+
+        The 'can_reuse' is a set of reusable joins for multijoins.
+
+        The method will create a filter clause that can be added to the current
+        query. However, if the filter isn't added to the query then the caller
+        is responsible for unreffing the joins used.
+        """
+        if isinstance(filter_expr, dict):
+            raise FieldError("Cannot parse keyword query as dict")
+        if isinstance(filter_expr, Q):
+            return self._add_q(
+                filter_expr,
+                branch_negated=branch_negated,
+                current_negated=current_negated,
+                used_aliases=can_reuse,
+                allow_joins=allow_joins,
+                split_subq=split_subq,
+                check_filterable=check_filterable,
+                summarize=summarize,
+                update_join_types=update_join_types,
+            )
+        if hasattr(filter_expr, "resolve_expression"):
+            if not getattr(filter_expr, "conditional", False):
+                raise TypeError("Cannot filter against a non-conditional expression.")
+            condition = filter_expr.resolve_expression(
+                self, allow_joins=allow_joins, reuse=can_reuse, summarize=summarize
+            )
+            if not isinstance(condition, Lookup):
+                condition = self.build_lookup(["exact"], condition, True)
+            return WhereNode([condition], connector=AND), []
+        arg, value = filter_expr
+        if not arg:
+            raise FieldError("Cannot parse keyword query %r" % arg)
+        lookups, parts, reffed_expression = self.solve_lookup_type(arg, summarize)
+
+        if check_filterable:
+            self.check_filterable(reffed_expression)
+
+        if not allow_joins and len(parts) > 1:
+            raise FieldError("Joined field references are not permitted in this query")
+
+        pre_joins = self.alias_refcount.copy()
+        value = self.resolve_lookup_value(value, can_reuse, allow_joins, summarize)
+        used_joins = {
+            k for k, v in self.alias_refcount.items() if v > pre_joins.get(k, 0)
+        }
+
+        if check_filterable:
+            self.check_filterable(value)
+
+        if reffed_expression:
+            condition = self.build_lookup(lookups, reffed_expression, value)
+            return WhereNode([condition], connector=AND), []
+
+        opts = self.get_meta()
+        alias = self.get_initial_alias()
+        allow_many = not branch_negated or not split_subq
+
+        try:
+            join_info = self.setup_joins(
+                parts,
+                opts,
+                alias,
+                can_reuse=can_reuse,
+                allow_many=allow_many,
+            )
+
+            # Prevent iterator from being consumed by check_related_objects()
+            if isinstance(value, Iterator):
+                value = list(value)
+            self.check_related_objects(join_info.final_field, value, join_info.opts)
+
+            # split_exclude() needs to know which joins were generated for the
+            # lookup parts
+            self._lookup_joins = join_info.joins
+        except MultiJoin as e:
+            return self.split_exclude(filter_expr, can_reuse, e.names_with_path)
+
+        # Update used_joins before trimming since they are reused to determine
+        # which joins could be later promoted to INNER.
+        used_joins.update(join_info.joins)
+        targets, alias, join_list = self.trim_joins(
+            join_info.targets, join_info.joins, join_info.path
+        )
+        if can_reuse is not None:
+            can_reuse.update(join_list)
+
+        if join_info.final_field.is_relation:
+            if len(targets) == 1:
+                col = self._get_col(targets[0], join_info.final_field, alias)
+            else:
+                col = ColPairs(alias, targets, join_info.targets, join_info.final_field)
+        else:
+            col = self._get_col(targets[0], join_info.final_field, alias)
+
+        condition = self.build_lookup(lookups, col, value)
+        lookup_type = condition.lookup_name
+        clause = WhereNode([condition], connector=AND)
+
+        require_outer = (
+            lookup_type == "isnull" and condition.rhs is True and not current_negated
+        )
+        if (
+            current_negated
+            and (lookup_type != "isnull" or condition.rhs is False)
+            and condition.rhs is not None
+        ):
+            require_outer = True
+            if lookup_type != "isnull":
+                # The condition added here will be SQL like this:
+                # NOT (col IS NOT NULL), where the first NOT is added in
+                # upper layers of code. The reason for addition is that if col
+                # is null, then col != someval will result in SQL "unknown"
+                # which isn't the same as in Python. The Python None handling
+                # is wanted, and it can be gotten by
+                # (col IS NULL OR col != someval)
+                #   <=>
+                # NOT (col IS NOT NULL AND col = someval).
+                if (
+                    self.is_nullable(targets[0])
+                    or self.alias_map[join_list[-1]].join_type == LOUTER
+                ):
+                    lookup_class = targets[0].get_lookup("isnull")
+                    col = self._get_col(targets[0], join_info.targets[0], alias)
+                    # Use OR + IS NULL when RHS `in` values include None.
+                    if (
+                        lookup_type == "in"
+                        # Check containers (not strings or bytes).
+                        and isinstance(condition.rhs, Iterable)
+                        and not isinstance(condition.rhs, (str, bytes))
+                        and any(v is None for v in condition.rhs)
+                    ):
+                        clause.add(lookup_class(col, True), OR)
+                    else:
+                        clause.add(lookup_class(col, False), AND)
+                # If someval is a nullable column, someval IS NOT NULL is
+                # added.
+                if isinstance(value, Col) and self.is_nullable(value.target):
+                    lookup_class = value.target.get_lookup("isnull")
+                    clause.add(lookup_class(value, False), AND)
+        return clause, used_joins if not require_outer else ()
+
+# --- dependencies (19) ---
+# django/core/exceptions.py
+
+# FieldError  [L2, 7t]  <- Query.build_filter  CALLS
+class FieldError(Exception):
+    ...
+
+# django/db/models/expressions.py
+from django.db import DatabaseError, NotSupportedError, connection
+
+# ColPairs  [L2, 684t]  <- Query.build_filter  CALLS
+class ColPairs(Expression):
+    def __init__(self, alias, targets, sources, output_field): ...
+    def __len__(self): ...
+    def __iter__(self): ...
+    def __repr__(self): ...
+    def get_cols(self): ...
+    def get_source_expressions(self): ...
+    def set_source_expressions(self, exprs): ...
+    def as_sql(self, compiler, connection): ...
+    def relabeled_clone(self, relabels): ...
+    def resolve_expression(self, *args, **kwargs): ...
+    def select_format(self, compiler, sql, params): ...
+    def identity(self): ...  # from django.db.models.expressions.Expression
+    def get_db_converters(self, connection): ...  # from django.db.models.expressions.BaseExpression
+    def contains_aggregate(self): ...  # from django.db.models.expressions.BaseExpression
+    def contains_over_clause(self): ...  # from django.db.models.expressions.BaseExpression
+    def contains_column_references(self): ...  # from django.db.models.expressions.BaseExpression
+    def contains_subquery(self): ...  # from django.db.models.expressions.BaseExpression
+    def conditional(self): ...  # from django.db.models.expressions.BaseExpression
+    def field(self): ...  # from django.db.models.expressions.BaseExpression
+    def output_field(self): ...  # from django.db.models.expressions.BaseExpression
+    def convert_value(self): ...  # from django.db.models.expressions.BaseExpression
+    def get_lookup(self, lookup): ...  # from django.db.models.expressions.BaseExpression
+    def get_transform(self, name): ...  # from django.db.models.expressions.BaseExpression
+    def replace_expressions(self, replacements): ...  # from django.db.models.expressions.BaseExpression
+    def get_refs(self): ...  # from django.db.models.expressions.BaseExpression
+    def copy(self): ...  # from django.db.models.expressions.BaseExpression
+    def prefix_references(self, prefix): ...  # from django.db.models.expressions.BaseExpression
+    def get_group_by_cols(self): ...  # from django.db.models.expressions.BaseExpression
+    def get_source_fields(self): ...  # from django.db.models.expressions.BaseExpression
+    def asc(self, **kwargs): ...  # from django.db.models.expressions.BaseExpression
+    def desc(self, **kwargs): ...  # from django.db.models.expressions.BaseExpression
+    def reverse_ordering(self): ...  # from django.db.models.expressions.BaseExpression
+    def flatten(self): ...  # from django.db.models.expressions.BaseExpression
+    def get_expression_for_validation(self): ...  # from django.db.models.expressions.BaseExpression
+    def bitand(self, other): ...  # from django.db.models.expressions.Combinable
+    def bitleftshift(self, other): ...  # from django.db.models.expressions.Combinable
+    def bitrightshift(self, other): ...  # from django.db.models.expressions.Combinable
+    def bitxor(self, other): ...  # from django.db.models.expressions.Combinable
+    def bitor(self, other): ...  # from django.db.models.expressions.Combinable
+
+# django/db/models/query.py
+from django.db import (
+    DJANGO_VERSION_PICKLE_KEY,
+    IntegrityError,
+    NotSupportedError,
+    connections,
+    router,
+    transaction,
+)
+
+class QuerySet:
+# _filter_or_exclude  [L2, 19t]  <- QuerySet.filter  CALLS
+    def _filter_or_exclude(self, negate, args, kwargs): ...
+# _not_support_combined_queries  [L2, 49t]  <- QuerySet.filter  CALLS
+    def _not_support_combined_queries(self, operation_name): ...
+
+# django/db/models/sql/query.py
+from django.db.models.constants import LOOKUP_SEP
+from django.db import DEFAULT_DB_ALIAS, NotSupportedError, connections
+from django.db.models.fields import Field
+import functools
+
+class Query:
+# get_meta  [L2, 27t]  <- Query.build_filter  CALLS
+    def get_meta(self): ...
+    """Return the Options instance (the model._meta) from which to start"""
+# _get_col  [L2, 17t]  <- Query.build_filter  CALLS
+    def _get_col(self, target, field, alias): ...
+# get_initial_alias  [L2, 26t]  <- Query.build_filter  CALLS
+    def get_initial_alias(self): ...
+    """Return the first alias for this query, after increasing its reference"""
+# resolve_lookup_value  [L2, 24t]  <- Query.build_filter  CALLS
+    def resolve_lookup_value(self, value, can_reuse, allow_joins, summarize=False): ...
+# solve_lookup_type  [L2, 129t]  <- Query.build_filter  CALLS
+    def solve_lookup_type(self, lookup, summarize=False): ...
+    """Solve the lookup type from the lookup (e.g.: 'foobar__id__icontains')."""
+# check_related_objects  [L2, 52t]  <- Query.build_filter  CALLS
+    def check_related_objects(self, field, value, opts): ...
+    """Check the type of object passed to query relations."""
+# check_filterable  [L2, 42t]  <- Query.build_filter  CALLS
+    def check_filterable(self, expression): ...
+    """Raise an error if expression cannot be used in a WHERE clause."""
+# build_lookup  [L2, 43t]  <- Query.build_filter  CALLS
+    def build_lookup(self, lookups, lhs, rhs): ...
+    """Try to extract transforms and lookup from given lhs."""
+# _add_q  [L2, 81t]  <- Query.build_filter  CALLS
+    def _add_q(self, q_object, used_aliases, branch_negated=False, current_negated=False, allow_joins=True, split_subq=True, check_filterable=True, summarize=False, update_join_types=True): ...
+    """Add a Q-object to the current filter."""
+# setup_joins  [L2, 81t]  <- Query.build_filter  CALLS
+    def setup_joins(self, names, opts, alias, can_reuse=None, allow_many=True): ...
+    """Compute the necessary table joins for the passage through the fields"""
+# trim_joins  [L2, 37t]  <- Query.build_filter  CALLS
+    def trim_joins(self, targets, joins, path): ...
+    """The 'target' parameter is the final field being joined to, 'joins'"""
+# split_exclude  [L2, 105t]  <- Query.build_filter  CALLS
+    def split_exclude(self, filter_expr, can_reuse, names_with_path): ...
+    """When doing an exclude against any kind of N-to-many relation, we need"""
+# is_nullable  [L2, 39t]  <- Query.build_filter  CALLS
+    def is_nullable(self, field): ...
+    """Check if the given field should be treated as nullable."""
+
+# django/db/models/sql/where.py
+from django.core.exceptions import EmptyResultSet, FullResultSet
+from django.db.models.expressions import Case, When
+from django.db.models.functions import Mod
+from django.db.models.lookups import Exact
+from django.utils import tree
+from django.utils.functional import cached_property
+from functools import reduce
+import operator
+
+# WhereNode  [L2, 376t]  <- Query.build_filter  CALLS
+class WhereNode(tree.Node):
+    def split_having_qualify(self, negated=False, must_group_by=False): ...
+    def as_sql(self, compiler, connection): ...
+    def get_group_by_cols(self): ...
+    def get_source_expressions(self): ...
+    def set_source_expressions(self, children): ...
+    def relabel_aliases(self, change_map): ...
+    def clone(self): ...
+    def relabeled_clone(self, change_map): ...
+    def replace_expressions(self, replacements): ...
+    def get_refs(self): ...
+    def _contains_aggregate(cls, obj): ...
+    def contains_aggregate(self): ...
+    def _contains_over_clause(cls, obj): ...
+    def contains_over_clause(self): ...
+    def is_summary(self): ...
+    def _resolve_leaf(expr, query, *args, **kwargs): ...
+    def _resolve_node(cls, node, query, *args, **kwargs): ...
+    def resolve_expression(self, *args, **kwargs): ...
+    def output_field(self): ...
+    def _output_field_or_none(self): ...
+    def select_format(self, compiler, sql, params): ...
+    def get_db_converters(self, connection): ...
+    def get_lookup(self, lookup): ...
+    def leaves(self): ...
+    def create(cls, children=None, connector=None, negated=False): ...  # from django.utils.tree.Node
+    def add(self, data, conn_type): ...  # from django.utils.tree.Node
+    def negate(self): ...  # from django.utils.tree.Node
+
+# django/utils/tree.py
+
+class Node:
+# add  [L2, 28t]  <- Query.build_filter  CALLS
+    def add(self, data, conn_type): ...
+    """Combine this tree and the data represented by data using the"""
+
+# --- optional context (3) ---
+# django/db/models/sql/query.py
+from collections import Counter, namedtuple
+from django.db.models.aggregates import Count
+from django.utils.deprecation import RemovedInDjango70Warning
+from django.utils.regex_helper import _lazy_re_compile
+from django.utils.tree import Node
+from django.utils.warnings import django_file_prefixes
+from itertools import chain, count, product
+from string import ascii_uppercase
+import copy
+import difflib
+import sys
+import warnings
+
+# query  [L2, 297t]  <- Query.build_filter  OPTIONAL:static_caller
+# module django.db.models.sql.query
+
+# Query  [L2, 1872t]  <- Query.build_filter  OPTIONAL:static_caller
+class Query(BaseExpression):
+    def __init__(self, model, alias_cols=True): ...
+    def output_field(self): ...
+    def base_table(self): ...
+    def __str__(self): ...
+    def sql_with_params(self): ...
+    def __deepcopy__(self, memo): ...
+    def get_compiler(self, using=None, connection=None, elide_empty=True): ...
+    def get_meta(self): ...
+    def clone(self): ...
+    def chain(self, klass=None): ...
+    def relabeled_clone(self, change_map): ...
+    def _get_col(self, target, field, alias): ...
+    def get_aggregation(self, using, aggregate_exprs): ...
+    def get_count(self, using): ...
+    def has_filters(self): ...
+    def exists(self, limit=True): ...
+    def has_results(self, using): ...
+    def explain(self, using, format=None, **options): ...
+    def combine(self, rhs, connector): ...
+    def _get_defer_select_mask(self, opts, mask, select_mask=None): ...
+    def _get_only_select_mask(self, opts, mask, select_mask=None): ...
+    def get_select_mask(self): ...
+    def table_alias(self, table_name, create=False, filtered_relation=None): ...
+    def ref_alias(self, alias): ...
+    def unref_alias(self, alias, amount=1): ...
+    def promote_joins(self, aliases): ...
+    def demote_joins(self, aliases): ...
+    def reset_refcounts(self, to_counts): ...
+    def change_aliases(self, change_map): ...
+    def bump_prefix(self, other_query, exclude=None): ...
+    def get_initial_alias(self): ...
+    def count_active_tables(self): ...
+    def join(self, join, reuse=None): ...
+    def join_parent_model(self, opts, model, alias, seen): ...
+    def check_alias(self, alias): ...
+    def add_annotation(self, annotation, alias, select=True): ...
+    def _subquery_fields_len(self): ...
+    def resolve_expression(self, query, *args, **kwargs): ...
+    def get_external_cols(self): ...
+    def get_group_by_cols(self, wrapper=None): ...
+    def as_sql(self, compiler, connection): ...
+    def resolve_lookup_value(self, value, can_reuse, allow_joins, summarize=False): ...
+    def solve_lookup_type(self, lookup, summarize=False): ...
+    def check_query_object_type(self, value, opts, field): ...
+    def check_related_objects(self, field, value, opts): ...
+    def check_filterable(self, expression): ...
+    def build_lookup(self, lookups, lhs, rhs): ...
+    def try_transform(self, lhs, name, lookups=None): ...
+    def build_filter(self, filter_expr, branch_negated=False, current_negated=False, can_reuse=None, allow_joins=True, split_subq=True, check_filterable=True, summarize=False, update_join_types=True): ...
+    def add_filter(self, filter_lhs, filter_rhs): ...
+    def add_q(self, q_object, reuse_all=False): ...
+    def build_where(self, filter_expr): ...
+    def clear_where(self): ...
+    def _add_q(self, q_object, used_aliases, branch_negated=False, current_negated=False, allow_joins=True, split_subq=True, check_filterable=True, summarize=False, update_join_types=True): ...
+    def add_filtered_relation(self, filtered_relation, alias): ...
+    def names_to_path(self, names, opts, allow_many=True, fail_on_missing=False): ...
+    def setup_joins(self, names, opts, alias, can_reuse=None, allow_many=True): ...
+    def trim_joins(self, targets, joins, path): ...
+    def _gen_cols(cls, exprs, include_external=False, resolve_refs=True): ...
+    def _gen_col_aliases(cls, exprs): ...
+    def resolve_ref(self, name, allow_joins=True, reuse=None, summarize=False): ...
+    def split_exclude(self, filter_expr, can_reuse, names_with_path): ...
+    def set_empty(self): ...
+    def is_empty(self): ...
+    def set_limits(self, low=None, high=None): ...
+    def clear_limits(self): ...
+    def is_sliced(self): ...
+    def has_limit_one(self): ...
+    def can_filter(self): ...
+    def clear_select_clause(self): ...
+    def clear_select_fields(self): ...
+    def add_select_col(self, col, name): ...
+    def set_select(self, cols): ...
+    def add_distinct_fields(self, *field_names): ...
+    def add_fields(self, field_names, allow_m2m=True): ...
+    def add_ordering(self, *ordering): ...
+    def orderby_issubset_groupby(self): ...
+    def clear_ordering(self, force=False, clear_default=True): ...
+    def set_group_by(self, allow_aliases=True): ...
+    def add_select_related(self, fields): ...
+    def add_extra(self, select, select_params, where, params, tables, order_by): ...
+    def clear_deferred_loading(self): ...
+    def add_deferred_loading(self, field_names): ...
+    def add_immediate_loading(self, field_names): ...
+    def set_annotation_mask(self, names): ...
+    def append_annotation_mask(self, names): ...
+    def set_extra_mask(self, names): ...
+    def has_select_fields(self): ...
+    def set_values(self, fields): ...
+    def annotation_select(self): ...
+    def extra_select(self): ...
+    def trim_start(self, names_with_path): ...
+    def is_nullable(self, field): ...
+    def get_db_converters(self, connection): ...  # from django.db.models.expressions.BaseExpression
+    def get_source_expressions(self): ...  # from django.db.models.expressions.BaseExpression
+    def set_source_expressions(self, exprs): ...  # from django.db.models.expressions.BaseExpression
+    def contains_aggregate(self): ...  # from django.db.models.expressions.BaseExpression
+    def contains_over_clause(self): ...  # from django.db.models.expressions.BaseExpression
+    def contains_column_references(self): ...  # from django.db.models.expressions.BaseExpression
+    def contains_subquery(self): ...  # from django.db.models.expressions.BaseExpression
+    def conditional(self): ...  # from django.db.models.expressions.BaseExpression
+    def field(self): ...  # from django.db.models.expressions.BaseExpression
+    def convert_value(self): ...  # from django.db.models.expressions.BaseExpression
+    def get_lookup(self, lookup): ...  # from django.db.models.expressions.BaseExpression
+    def get_transform(self, name): ...  # from django.db.models.expressions.BaseExpression
+    def replace_expressions(self, replacements): ...  # from django.db.models.expressions.BaseExpression
+    def get_refs(self): ...  # from django.db.models.expressions.BaseExpression
+    def copy(self): ...  # from django.db.models.expressions.BaseExpression
+    def prefix_references(self, prefix): ...  # from django.db.models.expressions.BaseExpression
+    def get_source_fields(self): ...  # from django.db.models.expressions.BaseExpression
+    def asc(self, **kwargs): ...  # from django.db.models.expressions.BaseExpression
+    def desc(self, **kwargs): ...  # from django.db.models.expressions.BaseExpression
+    def reverse_ordering(self): ...  # from django.db.models.expressions.BaseExpression
+    def flatten(self): ...  # from django.db.models.expressions.BaseExpression
+    def select_format(self, compiler, sql, params): ...  # from django.db.models.expressions.BaseExpression
+    def get_expression_for_validation(self): ...  # from django.db.models.expressions.BaseExpression
+
+class Query:
+# build_where  [L2, 13t]  <- Query.build_filter  OPTIONAL:static_caller
+    def build_where(self, filter_expr): ...
+
+# --- mandatory identities (3) ---
+django.db.models.expressions.BaseExpression — django/db/models/expressions.py:174
+django.db.models.expressions.Expression — django/db/models/expressions.py:520
+django.utils.tree.Node — django/utils/tree.py:11
+
+# --- identity hints (24) ---
+django.db.models.aggregates.Count — django/db/models/aggregates.py:295
+django.db.models.constants.LOOKUP_SEP — django/db/models/constants.py:8
+django.db.models.expressions.Col — django/db/models/expressions.py:1351
+django.db.models.expressions.Exists — django/db/models/expressions.py:1887
+django.db.models.expressions.F — django/db/models/expressions.py:882
+django.db.models.expressions.When — django/db/models/expressions.py:1636
+django.db.models.functions.math.Mod — django/db/models/functions/math.py:126
+django.db.models.query_utils.Q — django/db/models/query_utils.py:41
+django.db.models.query_utils.Q.create — django/db/models/query_utils.py:64
+django.db.models.query_utils.refs_expression — django/db/models/query_utils.py:469
+django.db.models.sql.datastructures.Empty — django/db/models/sql/datastructures.py:23
+django.db.models.sql.query.Query.clone — django/db/models/sql/query.py:388
+django.db.models.sql.query.Query.exists — django/db/models/sql/query.py:662
+django.db.models.sql.query.Query.get_compiler — django/db/models/sql/query.py:370
+django.db.models.sql.query.Query.join — django/db/models/sql/query.py:1135
+django.db.models.sql.query.Query.ref_alias — django/db/models/sql/query.py:927
+django.db.models.sql.query.Query.table_alias — django/db/models/sql/query.py:900
+django.db.models.sql.query.RawQuery — django/db/models/sql/query.py:156
+django.db.models.sql.query.RawQuery.clone — django/db/models/sql/query.py:174
+django.db.utils.DEFAULT_DB_ALIAS — django/db/utils.py:13
+django.db.utils.NotSupportedError — django/db/utils.py:49
+django.utils.regex_helper._lazy_re_compile — django/utils/regex_helper.py:343
+django.utils.tree.Node.create — django/utils/tree.py:29
+django.utils.warnings.django_file_prefixes — django/utils/warnings.py:8
+
+
+[tool result block 1]
+{
+  "status": "OK",
+  "profile": "P3",
+  "emitted_symbols": 24,
+  "closure_size": 120,
+  "budget": 8000,
+  "budgeted_tokens": 6932,
+  "actual_tokens": 6130,
+  "token_margin": -802,
+  "round_trips": 20,
+  "latency_ms": 774.3,
+  "seeds_resolved": [
+    "django.db.models.query.QuerySet.filter",
+    "django.db.models.sql.query.Query.build_filter"
+  ]
+}
+
+[assistant]
+Here's the chain, based on what context-compiler pulled from Django's ORM source.
+
+## Why `QuerySet.filter` produces the SQL it does
+
+`QuerySet.filter()` (`django/db/models/query.py`) is a thin wrapper:
+
+```python
+def filter(self, *args, **kwargs):
+    self._not_support_combined_queries("filter")
+    return self._filter_or_exclude(False, args, kwargs)
+```
+
+It doesn't build SQL itself — it just delegates to `_filter_or_exclude`, which clones the current `QuerySet` and hands the args/kwargs off to the underlying `Query` object's filter-building machinery (`Query.add_q` → `Query._add_q` → `Query.build_filter`, for each condition). The actual SQL only gets generated much later, when the query is compiled (`Query.as_sql`/`SQLCompiler`) — `filter()` just accumulates a `WhereNode` tree on `self.query.where`. That's why chained `.filter().filter()` calls AND together, and why nothing hits the database until the queryset is evaluated.
+
+## What `build_filter` is doing
+
+`Query.build_filter` (`django/db/models/sql/query.py`) is the core per-clause translator: given one filter expression (a `Q` object, a conditional expression, or a `(lookup_string, value)` pair from a kwarg), it turns it into a `WhereNode` ready to be added to the query's WHERE tree. Concretely it:
+
+1. **Dispatches by type of `filter_expr`:**
+   - If it's a `Q` object, recurses into `Query._add_q` (Q objects are trees of filters combined with AND/OR/NOT).
+   - If it's an expression with `resolve_expression` (e.g. `Exists(...)`), resolves it directly into a `Lookup`.
+   - Otherwise it's a `(lookup, value)` pair like `("name__icontains", "bob")`.
+
+2. **Parses the lookup string** via `solve_lookup_type` — splits `"name__icontains"` into the field path (`["name"]`) and the lookup name (`"icontains"`).
+
+3. **Validates filterability** via `check_filterable`, rejecting expressions that can't legally appear in a WHERE clause (e.g. aggregates without `annotate`).
+
+4. **Resolves the RHS value** with `resolve_lookup_value`, recursively resolving any `F()`/expression values and tracking which joins that resolution required.
+
+5. **Walks relations to build joins** via `setup_joins` — this is what turns `related__field__lookup` into actual SQL `JOIN`s, resolving `parts` against the model's `_meta` starting from `get_initial_alias()`. If the path crosses a to-many relation in a negated context, it bails out to `split_exclude` (this is the source of Django's well-known "exclude across multi-valued relations" subquery behavior).
+
+6. **Trims redundant joins** via `trim_joins` and builds the final `Col` (or `ColPairs` for composite/multi-column fields) referencing the resolved column.
+
+7. **Builds the `Lookup` object** via `build_lookup(lookups, col, value)` — this is what actually knows how to render e.g. `icontains` as `LIKE '%...%'` at SQL-compile time — and wraps it in a `WhereNode([condition], connector=AND)`.
+
+8. **Handles negation/NULL semantics**: when `current_negated` is set, it adds extra `IS NULL`/`IS NOT NULL` conditions so that Python's three-valued-logic-free `!=` semantics (`col != val` should also match NULL rows, unlike SQL's `UNKNOWN` result) are preserved — the block with the long comment about `NOT (col IS NOT NULL AND col = someval)`.
+
+So `build_filter` is the piece that bridges the declarative kwarg/`Q` API to the join- and lookup-based structures (`WhereNode`, `Join`, `Lookup`) that the SQL compiler later renders — it's where field paths become joins, lookup suffixes become `Lookup` subclasses, and negation gets its NULL-safe rewriting.
+
+[session summary] turns=3 duration_api_ms=25593 is_error=False
+
