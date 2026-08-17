@@ -5,6 +5,12 @@
 #   scripts/run_hydradb.sh start   # default: start (or reuse) a backgrounded node, wait for readiness
 #   scripts/run_hydradb.sh stop    # stop a node started by this script
 #   scripts/run_hydradb.sh status  # check whether the node is ready
+#   scripts/run_hydradb.sh reset   # stop, WIPE the local store, start clean
+#
+# `reset` destroys every node and relationship in the local dev store. It exists
+# so ingest benchmarks and count assertions start from an empty graph; leftover
+# spike fixtures otherwise inflate the read-back counts. It only ever touches
+# $HYDRADB_DATA_ROOT (default ~/.local/state/hydradb-dev), never ~/hydradb.
 #
 # Exits non-zero if the node never becomes ready.
 set -euo pipefail
@@ -83,6 +89,14 @@ case "$cmd" in
     fi
     exit 0
     ;;
+  reset)
+    # Stop first and wait for full exit: the writer holds an object-store lease
+    # and runs an async compactor, so wiping under a live process corrupts the
+    # new instance's view of compacted SST files (see Item 0 results).
+    "$0" stop
+    rm -rf "$DATA_ROOT/store" "$DATA_ROOT/cache"
+    exec "$0" start
+    ;;
   start)
     mkdir -p "$DATA_ROOT/store" "$DATA_ROOT/cache"
     if [[ ! -f "$DATA_ROOT/auth-token" ]]; then
@@ -111,7 +125,7 @@ case "$cmd" in
     fi
     ;;
   *)
-    echo "usage: $0 {start|stop|status}" >&2
+    echo "usage: $0 {start|stop|status|reset}" >&2
     exit 2
     ;;
 esac
