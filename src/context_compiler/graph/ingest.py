@@ -409,6 +409,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--limit", type=int, default=0, help="debug: stop after N symbols")
     ap.add_argument("--skip-edges", action="store_true")
+    ap.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="skip the read-back. It is ~600 batch reads and takes about 12 minutes "
+        "on Django, because a whole-graph relationship count does not survive the "
+        "engine deadline (see the results doc).",
+    )
     ap.add_argument("--json", action="store_true", help="emit the report as JSON")
     args = ap.parse_args(argv)
 
@@ -430,7 +437,8 @@ def main(argv: list[str] | None = None) -> int:
             edge_stats, edge_summary = ingest_edges(client, edges_path, args.batch)
         wall = time.perf_counter() - t0
         t_verify = time.perf_counter()
-        counts = verify(client, node_summary.pop("node_ids"), args.batch)
+        ids = node_summary.pop("node_ids")
+        counts = {} if args.no_verify else verify(client, ids, args.batch)
         verify_seconds = time.perf_counter() - t_verify
     finally:
         client.close()

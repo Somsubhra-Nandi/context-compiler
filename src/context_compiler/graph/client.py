@@ -41,7 +41,47 @@ MAX_STRING_PROPERTY = 32_000
 #: Default rows per UNWIND batch (spec Sec 5.1 says start at 500).
 DEFAULT_BATCH = 500
 
+#: Bolt refuses a request whose serialised message exceeds 2 MiB:
+#: ``Neo.ClientError.Request.Invalid: message size exceeds limit of 2097152
+#: bytes``, and the server resets the connection rather than replying cleanly.
+#: A row-count limit alone cannot respect this -- 250 Django symbols carrying
+#: ``repr_*_text`` blow past it -- so batches are also capped by estimated
+#: payload. 1.5 MiB leaves headroom for the query text and Bolt framing.
+MAX_MESSAGE_BYTES = 2_097_152
+DEFAULT_PAYLOAD_BUDGET = 1_500_000
+
 RETRYABLE = (TransientError, ServiceUnavailable, DatabaseError)
+
+
+def row_bytes(row: dict) -> int:
+    """Estimate a row's serialised size: string payload plus per-field framing."""
+    total = 0
+    for key, value in row.items():
+        total += len(key) + 8
+        total += len(value.encode()) if isinstance(value, str) else 8
+    return total
+
+
+def chunk_rows(
+    rows: list[dict], size: int, budget: int | None = DEFAULT_PAYLOAD_BUDGET
+):
+    """Yield batches bounded by both row count and estimated payload bytes.
+
+    A single row larger than ``budget`` is still yielded alone -- the caller
+    cannot split it further, and letting the engine reject it produces a much
+    clearer error than silently dropping it.
+    """
+    current: list[dict] = []
+    used = 0
+    for row in rows:
+        n = row_bytes(row) if budget else 0
+        if current and (len(current) >= size or (budget and used + n > budget)):
+            yield current
+            current, used = [], 0
+        current.append(row)
+        used += n
+    if current:
+        yield current
 
 
 @dataclass
@@ -76,6 +116,7 @@ class GraphClient:
     auth: tuple[str, str] = AUTH
     database: str = DATABASE
     batch_size: int = DEFAULT_BATCH
+    payload_budget: int = DEFAULT_PAYLOAD_BUDGET
     max_retries: int = 3
     _driver: object | None = field(default=None, repr=False)
 
@@ -141,8 +182,8 @@ class GraphClient:
             self._run_chunked(s, query, rows, stats, size)
 
     def _run_chunked(self, s, query: str, rows: list[dict], stats: BatchStats, size: int) -> None:
-        for start in range(0, len(rows), size):
-            self._run_one(s, query, rows[start : start + size], stats)
+        for chunk in chunk_rows(rows, size, self.payload_budget):
+            self._run_one(s, query, chunk, stats)
 
     def _run_one(self, s, query: str, chunk: list[dict], stats: BatchStats) -> None:
         if not chunk:
