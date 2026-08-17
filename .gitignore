@@ -24,3 +24,8 @@ targets/
 
 # OS
 .DS_Store
+
+# Extraction artifacts
+out/
+*.scip
+*.jsonl
