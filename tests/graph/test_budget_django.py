@@ -30,7 +30,7 @@ from context_compiler.graph.expand import (
     ReverseReader,
 )
 from context_compiler.graph.profiles import P0, P3, PROFILES
-from context_compiler.graph.sidecar import load_degrees, load_sidecar
+from context_compiler.graph.sidecar import load_degree_tables, load_sidecar
 from context_compiler.graph.validate import PREDICTION, eligible_seeds, sample_seed_sets
 
 SYMBOLS = Path(os.environ.get("CC_SYMBOLS", "~/out/django/symbols.jsonl")).expanduser()
@@ -70,18 +70,20 @@ def sidecar():
 def degrees():
     if not EDGES.exists():
         pytest.skip(f"{EDGES} not present")
-    return load_degrees(EDGES, tuple(HARD_EDGES))
+    return load_degree_tables(EDGES, tuple(HARD_EDGES))
 
 
 @pytest.fixture(scope="module")
 def compiler(client, sidecar, degrees):
     with Expander(client, membership=sidecar) as expander:
         with ReverseReader(client, membership=sidecar) as reverse:
+            out_degree, in_degree = degrees
             yield Compiler(
                 sidecar=sidecar,
                 expander=expander,
                 reverse=reverse,
-                degrees=degrees,
+                degrees=out_degree,
+                in_degrees=in_degree,
             )
 
 
@@ -213,11 +215,13 @@ def test_closure_costs_at_most_twelve_round_trips(contexts):
         assert ctx.stats.closure_round_trips <= 12, ctx.stats
 
 
-def test_discovery_costs_one_round_trip_per_seed(contexts):
+def test_discovery_costs_one_round_trip_per_non_hub_seed(contexts):
+    """A3.1: |seeds| reverse reads, less any seed skipped as a hub."""
     for ctx in contexts:
         if not ctx.ok:
             continue
-        assert ctx.stats.discovery_round_trips == len(ctx.seeds)
+        expected = len(ctx.seeds) - ctx.stats.hubs_skipped
+        assert ctx.stats.discovery_round_trips == expected, ctx.stats
 
 
 def test_envelope_obeys_the_chunking_formula(contexts):

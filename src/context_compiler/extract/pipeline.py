@@ -12,7 +12,7 @@ import time
 from typing import Any
 
 from .ast_occurrences import Symbol, discover_file, occurrence_nodes
-from .constants import fold_constants
+from .constants import MAX_STATIC_VALUE_BYTES, fold_constants, render_folded
 from .mro import flatten_members
 from .representations import canonical_l2, canonical_l3, count_tokens, own_class_members
 from .scip_reader import ScipIndex, read_index, run_index, symbol_to_fqn
@@ -133,9 +133,16 @@ def extract_repository(repo: Path, out: Path, *, reindex: bool = True) -> dict[s
         symbol = by_fqn[fqn]
         l2 = canonical_l2(symbol, surfaces.get(fqn))
         l3 = canonical_l3(symbol)
-        folded = folds.get(fqn)
-        if symbol.kind == "constant" and folded and folded.evaluable:
-            l2 = f"{fqn.rsplit('.', 1)[-1]} = {repr(folded.value)}\n"
+        rendered = render_folded(folds.get(fqn)) if symbol.kind == "constant" else None
+        if rendered and rendered.inlined:
+            l2 = f"{fqn.rsplit('.', 1)[-1]} = {rendered.literal}\n"
+        elif rendered and rendered.over_cap:
+            # A2.2: keep the defining expression and state the size, so the
+            # model learns what the constant *is* without paying for the value.
+            l2 = l2.rstrip("\n") + (
+                f"\n# folded value omitted: {rendered.size_bytes:,} bytes"
+                f" (cap {MAX_STATIC_VALUE_BYTES:,})\n"
+            )
         identity = f"{fqn} — {symbol.path}:{getattr(symbol.node, 'lineno', 1)}"
         provenance = f"{fqn} [extracted: ast+scip]"
         rows.append({
@@ -148,8 +155,9 @@ def extract_repository(repo: Path, out: Path, *, reindex: bool = True) -> dict[s
             "repr_L3_text": l3, "repr_L3_tokens": count_tokens(l3),
             "repr_L3_refs": sorted(ids[x] for x in ref_fqns[(fqn, "L3")] if x in ids),
             "identity_tokens": count_tokens(identity), "provenance_tokens": count_tokens(provenance),
-            "evaluable": folded.evaluable if symbol.kind == "constant" and folded else (False if symbol.kind == "constant" else None),
-            "static_value": repr(folded.value) if symbol.kind == "constant" and folded and folded.evaluable else None,
+            "evaluable": rendered.evaluable if rendered else None,
+            "static_value": rendered.literal if rendered else None,
+            "static_value_bytes": rendered.size_bytes if rendered and rendered.over_cap else None,
             "mro_partial": mro_partial.get(fqn, False),
         })
 

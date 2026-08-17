@@ -24,7 +24,7 @@ from context_compiler.graph.closure import L1, L2, L3, closure
 from context_compiler.graph.compile import EXCEEDED, OK, Compiler
 from context_compiler.graph.expand import HARD_EDGES, CachingExpander, Expander, ReverseReader
 from context_compiler.graph.profiles import PROFILES
-from context_compiler.graph.sidecar import load_degrees, load_sidecar
+from context_compiler.graph.sidecar import load_degree_tables, load_sidecar
 from context_compiler.graph.validate import PREDICTION, eligible_seeds, sample_seed_sets
 
 
@@ -62,7 +62,7 @@ def main() -> int:
 
     t0 = time.perf_counter()
     sidecar = load_sidecar(symbols)
-    degrees = load_degrees(edges, tuple(HARD_EDGES))
+    degrees, in_degrees = load_degree_tables(edges, tuple(HARD_EDGES))
     print(
         f"sidecar {len(sidecar):,} symbols, degrees {len(degrees):,} sources, "
         f"{time.perf_counter() - t0:.2f}s",
@@ -80,7 +80,11 @@ def main() -> int:
     with Expander(client, membership=sidecar) as expander:
         with ReverseReader(client, membership=sidecar) as reverse:
             compiler = Compiler(
-                sidecar=sidecar, expander=expander, reverse=reverse, degrees=degrees
+                sidecar=sidecar,
+                expander=expander,
+                reverse=reverse,
+                degrees=degrees,
+                in_degrees=in_degrees,
             )
             for i, seeds in enumerate(sets, 1):
                 ctx = compiler.compile_context(seeds, args.budget)
@@ -110,6 +114,7 @@ def main() -> int:
                         "final_emitted": len(ctx.emitted()),
                         "levels": by_level,
                         "candidates": ctx.stats.candidates,
+                        "hubs_skipped": ctx.stats.hubs_skipped,
                         "admitted": ctx.stats.admitted,
                         "bundles_evaluated": ctx.stats.bundles_evaluated,
                         "mandatory_identities": len(mand),
@@ -161,6 +166,7 @@ def main() -> int:
         "total_tokens": stat(r["total_tokens"] for r in ok),
         "utilisation": stat(r["utilisation"] for r in ok),
         "candidates": stat(r["candidates"] for r in ok),
+        "hubs_skipped": sum(r["hubs_skipped"] for r in rows),
         "admitted": stat(r["admitted"] for r in ok),
         "bundles_evaluated": stat(r["bundles_evaluated"] for r in ok),
         "bundle_size": stat(b for r in packed for b in r["bundle_sizes"]),

@@ -32,7 +32,8 @@ Required fields and types:
 | `identity_tokens` | integer | Token cost of this symbol's identity line |
 | `provenance_tokens` | integer | Token cost of this symbol's provenance trailer |
 | `evaluable` | boolean or null | Constant-fold result; null for non-constants |
-| `static_value` | string or null | Folded constant value; null otherwise |
+| `static_value` | string or null | Folded constant literal; null otherwise, and null when over the A2.2 cap |
+| `static_value_bytes` | integer or null | Size of the folded literal, present **only** when it exceeded the cap |
 | `mro_partial` | boolean | Whether class MRO flattening fell back to own members |
 
 `node_id(fqn)` is:
@@ -46,6 +47,32 @@ in sorted-FQN order. Token counts use `cl100k_base` through the extraction layer
 single `count_tokens(text)` function. `repr_*_refs` contain unique IDs in ascending
 order. Constants alone use non-null `evaluable`; `static_value` is non-null only
 when `evaluable` is true.
+
+### Folded constants are capped at 4 KB (Amendment A2.2)
+
+```
+folded literal <= 4,096 bytes  ->  evaluable: true,  static_value: "<literal>",
+                                   static_value_bytes: null
+folded literal >  4,096 bytes  ->  evaluable: true,  static_value: null,
+                                   static_value_bytes: <int>
+not evaluable                  ->  evaluable: false, static_value: null,
+                                   static_value_bytes: null
+```
+
+**`evaluable` stays `true` above the cap.** The constant *is* statically
+evaluable; the extractor is declining to inline it. Downgrading it to `false`
+would misdescribe the code and would change which Sec 4 propagation row applies.
+
+**The literal is never truncated.** A clipped constant looks valid and is wrong,
+and I4's guarantee that token counts describe the canonical emitted
+representation depends on stored text being exactly what was costed. When the
+value is omitted, `repr_L2_text` carries the defining expression plus a
+`# folded value omitted: N bytes` comment, so the model learns what the constant
+is without paying for its contents.
+
+Size is measured in **UTF-8 bytes**, not characters. One Django constant
+(`tests.validators.tests.INVALID_URLS`) folds to 66,517 bytes and broke the
+default ingest before this cap existed.
 
 ## `edges.jsonl`
 

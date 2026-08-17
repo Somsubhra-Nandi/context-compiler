@@ -75,6 +75,13 @@ from .sidecar import SymbolMeta
 OK = "OK"
 EXCEEDED = "CLOSURE_BUDGET_EXCEEDED"
 
+#: A3.2. The binding constraint on the P0 floor is the seeds' own
+#: declarations, not the breadth of the closure beneath them -- P0 puts
+#: everything below the seeds at L1. So EXCEEDED is a *too many seeds*
+#: condition, and Sec 6.2's "narrow the task" wording pointed at the wrong
+#: lever. Measured P0 floor: 465 tokens median, 689 max over 200 trials.
+EXCEEDED_SUGGESTION = "reduce the seed count or raise the budget"
+
 
 @dataclass
 class CompileStats:
@@ -86,6 +93,7 @@ class CompileStats:
     envelope_round_trips: int = 0
     profiles_tried: int = 0
     candidates: int = 0
+    hubs_skipped: int = 0
     bundles_evaluated: int = 0
     admitted: int = 0
     floor_cost: int = 0
@@ -154,6 +162,7 @@ class Compiler:
     expander: object
     reverse: object | None = None
     degrees: Mapping[int, int] = field(default_factory=dict)
+    in_degrees: Mapping[int, int] = field(default_factory=dict)
     sources: Sequence[CandidateSource] = CANDIDATE_SOURCES
     profiles: Sequence[Profile] = PROFILES
 
@@ -208,7 +217,7 @@ class Compiler:
             profile=self.profiles[-1],
             cost=floor,
             deficit=floor - effective,
-            suggestion="narrow the task or raise the budget",
+            suggestion=EXCEEDED_SUGGESTION,
             stats=stats,
         )
 
@@ -227,7 +236,7 @@ class Compiler:
         stats.floor_symbols = len(levels)
         stats.floor_emitted = len({n for n, lv in levels.items() if lv >= L2})
 
-        candidates = self._discover(seeds, cache, levels)
+        candidates = self._discover(seeds, cache, levels, stats)
         stats.discovery_round_trips = _round_trips(self.reverse) - before_reverse
         stats.candidates = len(candidates)
 
@@ -294,12 +303,17 @@ class Compiler:
 
     # -- candidate discovery and envelope --------------------------------
 
-    def _discover(self, seeds, cache, levels) -> list[Candidate]:
+    def _discover(self, seeds, cache, levels, stats) -> list[Candidate]:
         if self.reverse is None:
             return []
-        ctx = DiscoveryContext(reverse=self.reverse, edges=cache.edges, sidecar=self.sidecar)
+        ctx = DiscoveryContext(
+            reverse=self.reverse,
+            edges=cache.edges,
+            sidecar=self.sidecar,
+            in_degrees=self.in_degrees,
+        )
         emitted = {n for n, lv in levels.items() if lv >= L2}
-        return build_candidates(
+        found = build_candidates(
             seeds=seeds,
             sources=self.sources,
             ctx=ctx,
@@ -307,6 +321,8 @@ class Compiler:
             n_symbols=self.n_symbols,
             exclude=emitted,
         )
+        stats.hubs_skipped = len(ctx.skipped_hubs)
+        return found
 
     def _envelope(self, candidates: Sequence[Candidate], cache: CachingExpander) -> None:
         """Fetch every candidate's mandatory neighbourhood in one pass.

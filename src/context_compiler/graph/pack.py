@@ -43,6 +43,13 @@ from .budget import CostState
 from .closure import L0, L2, L3, Level, Reason, induced_delta
 from .sidecar import SymbolMeta
 
+#: A3.1. Above this in-degree, reverse discovery is skipped: the read costs
+#: seconds and returns only candidates ``idf`` would suppress anyway.
+HUB_SKIP_DEGREE = 500
+
+#: A3.4. Largest candidate pool the greedy loop is allowed to see.
+POOL_CAP = 150
+
 
 # -- candidate sources ---------------------------------------------------
 
@@ -91,6 +98,12 @@ class StaticCallerSource(CandidateSource):
     def find(self, seeds, ctx) -> dict[int, tuple[int, ...]]:
         out: dict[int, list[int]] = {}
         for seed in seeds:
+            if ctx.is_hub(seed):
+                # A3.1: a 2,824-in-degree read costs 9 s, and LIMIT does not
+                # bound the scan. Every candidate it would return is one `idf`
+                # suppresses anyway, so the read buys nothing.
+                ctx.skipped_hubs.append(seed)
+                continue
             for caller in ctx.reverse.read("CALLS", seed):
                 out.setdefault(caller, []).append(seed)
         return {n: tuple(v) for n, v in out.items()}
@@ -184,6 +197,12 @@ class DiscoveryContext:
     reverse: object
     edges: Mapping[int, list[tuple[str, int]]]
     sidecar: Mapping[int, SymbolMeta]
+    in_degrees: Mapping[int, int] = field(default_factory=dict)
+    skipped_hubs: list[int] = field(default_factory=list)
+
+    def is_hub(self, node: int) -> bool:
+        """A3.1: too many callers to be worth a reverse read."""
+        return self.in_degrees.get(node, 0) > HUB_SKIP_DEGREE
 
 
 # -- scoring -------------------------------------------------------------
@@ -225,6 +244,22 @@ class Candidate:
         return self.source.level
 
 
+def tokens_at(meta: SymbolMeta, level: Level) -> int:
+    """A candidate's own token cost at its admission level.
+
+    ``tokens_at(y) <= delta_cost(y | S)`` always, because a bundle contains the
+    candidate plus whatever it drags in. That makes ``score/tokens_at`` an
+    admissible **upper bound** on a candidate's true value -- which is exactly
+    what a cap has to rank by if it is not to discard something the greedy loop
+    would have admitted.
+    """
+    if level >= L3:
+        return max(1, meta.repr_L3_tokens)
+    if level == L2:
+        return max(1, meta.repr_L2_tokens)
+    return 1
+
+
 def build_candidates(
     seeds: Sequence[int],
     sources: Sequence[CandidateSource],
@@ -232,12 +267,26 @@ def build_candidates(
     degrees: Mapping[int, int],
     n_symbols: int,
     exclude: set[int] | None = None,
+    cap: int = POOL_CAP,
 ) -> list[Candidate]:
-    """Discover and score the candidate pool.
+    """Discover, score and cap the candidate pool.
 
     A candidate already emitted in the mandatory floor is dropped: it is
     included by rule, so proposing it is a no-op. Seeds are dropped for the
     same reason.
+
+    **A3.4: the pool is capped at ``cap`` candidates, ranked by the
+    ``score/tokens_at`` upper bound.** The Sec 6.3 loop re-evaluates every
+    surviving candidate on every iteration, so it is O(admissions x pool); one
+    Django trial with a 784-candidate pool ran 62,370 bundle evaluations and
+    took 21.9 s, which Item 7 cannot expose over MCP. Median admissions is 21,
+    so 150 is roughly 7x headroom and nothing below the cut would realistically
+    be admitted.
+
+    The cap replaces Sec 6.3's lazy-greedy fallback rather than implementing
+    it: the fallback's trigger was envelope cost, and the envelope is not the
+    problem -- the in-memory re-evaluation is. **The per-iteration re-ranking
+    stays**, because it is what makes shared dependencies pay off.
     """
     exclude = exclude or set()
     best: dict[int, Candidate] = {}
@@ -252,7 +301,12 @@ def build_candidates(
             current = best.get(node)
             if current is None or cand.score > current.score:
                 best[node] = cand
-    return sorted(best.values(), key=lambda c: (-c.score, c.node))
+
+    def upper_bound(c: Candidate) -> float:
+        return c.score / tokens_at(ctx.sidecar[c.node], c.level)
+
+    ordered = sorted(best.values(), key=lambda c: (-upper_bound(c), c.node))
+    return ordered[:cap] if cap else ordered
 
 
 # -- the packing loop ----------------------------------------------------

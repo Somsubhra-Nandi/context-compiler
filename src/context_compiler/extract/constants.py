@@ -18,10 +18,66 @@ _UNARY = {ast.UAdd: operator.pos, ast.USub: operator.neg, ast.Invert: operator.i
           ast.Not: operator.not_}
 
 
+#: Amendment A2.2. Largest folded literal that gets inlined into
+#: ``static_value`` and ``repr_L2_text``.
+#:
+#: The engine limit that surfaced this is incidental -- one Django constant
+#: (``tests.validators.tests.INVALID_URLS``) folds to 66,517 bytes and broke
+#: the default ingest, because a string property caps just under 32 KiB. The
+#: real reason for the cap is that a 66 KB folded constant is *bad context*:
+#: the model does not need 2,000 invalid URLs, it needs to know the constant is
+#: a list of invalid URLs. Inlining it wastes budget the packer could spend on
+#: a caller.
+MAX_STATIC_VALUE_BYTES = 4096
+
+
 @dataclass(frozen=True)
 class Folded:
     evaluable: bool
     value: Any = None
+
+
+@dataclass(frozen=True)
+class Rendered:
+    """A folded constant, after the A2.2 size decision.
+
+    ``evaluable`` stays **true** for an over-cap value: the constant *is*
+    statically evaluable, we are simply declining to inline it. Downgrading it
+    to false would be a lie about the code, and would change which propagation
+    row Sec 4 applies to it.
+
+    ``literal`` is ``None`` when over cap. It is **never truncated** -- a
+    clipped constant looks valid and is wrong, and I4's "token counts describe
+    the canonical emitted representation" depends on stored text being exactly
+    what was costed.
+    """
+
+    evaluable: bool
+    literal: str | None = None
+    size_bytes: int = 0
+
+    @property
+    def inlined(self) -> bool:
+        return self.literal is not None
+
+    @property
+    def over_cap(self) -> bool:
+        return self.evaluable and self.literal is None
+
+
+def render_folded(folded: Folded | None, cap: int = MAX_STATIC_VALUE_BYTES) -> Rendered:
+    """Apply the A2.2 cap to a fold result.
+
+    ``None`` (no fold attempted) and a failed fold both render as
+    non-evaluable with no literal.
+    """
+    if folded is None or not folded.evaluable:
+        return Rendered(evaluable=False)
+    literal = repr(folded.value)
+    size = len(literal.encode())
+    if size > cap:
+        return Rendered(evaluable=True, literal=None, size_bytes=size)
+    return Rendered(evaluable=True, literal=literal, size_bytes=size)
 
 
 def _evaluate(node: ast.AST, resolve: Any) -> Any:

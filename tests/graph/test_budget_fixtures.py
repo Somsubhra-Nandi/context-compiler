@@ -33,7 +33,7 @@ from context_compiler.graph.closure import (
     closure,
     induced_delta,
 )
-from context_compiler.graph.compile import EXCEEDED, OK, Compiler
+from context_compiler.graph.compile import EXCEEDED, EXCEEDED_SUGGESTION, OK, Compiler
 from context_compiler.graph.expand import (
     HARD_EDGES,
     CachingExpander,
@@ -41,6 +41,8 @@ from context_compiler.graph.expand import (
     FrozenExpander,
 )
 from context_compiler.graph.pack import (
+    HUB_SKIP_DEGREE,
+    POOL_CAP,
     Candidate,
     CandidateSource,
     DiscoveryContext,
@@ -49,6 +51,7 @@ from context_compiler.graph.pack import (
     idf,
     pack,
     relevance,
+    tokens_at,
 )
 from context_compiler.graph.profiles import P0, P1, P2, P3, PROFILES
 from context_compiler.graph.sidecar import SymbolMeta
@@ -674,7 +677,8 @@ def test_closure_budget_exceeded_returns_with_a_correct_deficit():
 
     assert ctx.status == EXCEEDED
     assert not ctx.ok
-    assert ctx.suggestion == "narrow the task or raise the budget"
+    assert ctx.suggestion == EXCEEDED_SUGGESTION
+    assert ctx.suggestion == "reduce the seed count or raise the budget"
 
     effective = budget - int(budget * HINT_RESERVE)
     floor = cost(
@@ -752,6 +756,108 @@ def test_packing_grows_the_context_beyond_the_mandatory_floor():
     assert ctx.stats.floor_symbols == 2
     assert len(ctx.levels) == 7
     assert ctx.stats.admitted == 5
+
+
+# =======================================================================
+# 8. Amendment A3
+# =======================================================================
+
+
+def test_hub_seeds_are_skipped_for_reverse_discovery():
+    """A3.1: above 500 in-degree the read costs seconds and buys nothing."""
+    edges = [(20, "CALLS", 1), (21, "CALLS", 2)]
+    sidecar = {n: meta(n) for n in (1, 2, 20, 21)}
+    reverse = StubReverse(edges)
+    ctx = DiscoveryContext(
+        reverse=reverse,
+        edges={},
+        sidecar=sidecar,
+        in_degrees={1: HUB_SKIP_DEGREE + 1, 2: HUB_SKIP_DEGREE},
+    )
+    got = build_candidates([1, 2], (StaticCallerSource(),), ctx, {}, 100)
+
+    assert ctx.skipped_hubs == [1]
+    assert reverse.round_trips == 1  # only the non-hub seed was read
+    assert [c.node for c in got] == [21]  # node 20 was never discovered
+
+
+def test_hub_skip_is_exactly_at_the_threshold():
+    """500 is read; 501 is skipped."""
+    for degree, expected_reads in ((HUB_SKIP_DEGREE, 1), (HUB_SKIP_DEGREE + 1, 0)):
+        reverse = StubReverse([(20, "CALLS", 1)])
+        ctx = DiscoveryContext(
+            reverse=reverse, edges={}, sidecar={1: meta(1), 20: meta(20)},
+            in_degrees={1: degree},
+        )
+        build_candidates([1], (StaticCallerSource(),), ctx, {}, 100)
+        assert reverse.round_trips == expected_reads, degree
+
+
+def test_candidate_pool_is_capped():
+    """A3.4: the greedy loop must not see an unbounded pool."""
+    edges = [(100 + i, "CALLS", 1) for i in range(400)]
+    sidecar = {1: meta(1)} | {100 + i: meta(100 + i) for i in range(400)}
+    ctx = DiscoveryContext(reverse=StubReverse(edges), edges={}, sidecar=sidecar)
+    got = build_candidates([1], (StaticCallerSource(),), ctx, {}, 43_420)
+    assert len(got) == POOL_CAP == 150
+
+
+def test_pool_cap_ranks_by_the_score_over_tokens_upper_bound():
+    """`tokens_at(y) <= delta_cost(y|S)`, so this bound never under-ranks.
+
+    Two candidates with identical scores: the cheap one must survive a cap of
+    one, because a cap ranking by raw score would keep whichever came first.
+    """
+    edges = [(20, "CALLS", 1), (21, "CALLS", 1)]
+    sidecar = {
+        1: meta(1),
+        20: meta(20, t2=500),  # same score, 50x the tokens
+        21: meta(21, t2=10),
+    }
+    ctx = DiscoveryContext(reverse=StubReverse(edges), edges={}, sidecar=sidecar)
+    got = build_candidates([1], (StaticCallerSource(),), ctx, {}, 100, cap=1)
+    assert [c.node for c in got] == [21]
+
+
+def test_tokens_at_is_a_lower_bound_on_bundle_cost():
+    """The property that makes the cap admissible, checked directly."""
+    edges = [(20, "CALLS", 50)]
+    sidecar = {1: meta(1), 20: meta(20, t2=10, r2=(50,)), 50: meta(50, ident=6)}
+    cache = CachingExpander(StubExpander(edges))
+    cache([20])
+    levels = {1: L3}
+    state = CostState(levels, sidecar)
+    delta, _ = induced_delta(levels, {20: L2}, cache.frozen(), P3)
+    assert tokens_at(sidecar[20], L2) <= state.delta_cost(delta)
+
+
+def test_pool_cap_does_not_disable_per_iteration_reranking():
+    """A3.4 caps the pool; it must not turn greedy into a static ordering."""
+    edges = [(20, "CALLS", 50), (21, "CALLS", 50)]
+    sidecar = {
+        1: meta(1, t3=10),
+        20: meta(20, t2=10, r2=(50,)),
+        21: meta(21, t2=10, r2=(50,)),
+        50: meta(50, ident=6),
+    }
+    cache = CachingExpander(StubExpander(edges))
+    cache([20, 21])
+    levels = {1: L3}
+    state = CostState(levels, sidecar)
+    source = StaticCallerSource()
+    report = pack(
+        1_000, levels, {},
+        [Candidate(20, source, (1,), 1.0), Candidate(21, source, (1,), 0.9)],
+        state, cache.frozen(), P3,
+    )
+    # The shared dependency is paid once: the second bundle is cheaper.
+    assert [a.delta_cost for a in report.admitted] == [21, 15]
+
+
+def test_exceeded_suggestion_names_the_binding_constraint():
+    """A3.2: P0's floor is bounded by the seeds' own declarations."""
+    assert EXCEEDED_SUGGESTION == "reduce the seed count or raise the budget"
+    assert "narrow the task" not in EXCEEDED_SUGGESTION
 
 
 def test_compile_is_deterministic():

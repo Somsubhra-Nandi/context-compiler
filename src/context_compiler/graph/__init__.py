@@ -29,6 +29,7 @@ from .closure import (
 )
 from .compile import (
     EXCEEDED,
+    EXCEEDED_SUGGESTION,
     OK,
     CompileStats,
     Compiler,
@@ -47,6 +48,8 @@ from .expand import (
 )
 from .pack import (
     CANDIDATE_SOURCES,
+    HUB_SKIP_DEGREE,
+    POOL_CAP,
     Candidate,
     CandidateSource,
     DiscoveryContext,
@@ -55,11 +58,13 @@ from .pack import (
     idf,
     pack,
     relevance,
+    tokens_at,
 )
 from .profiles import P0, P1, P2, P3, PROFILES, Profile
 from .sidecar import (
     SymbolMeta,
     TextOffset,
+    load_degree_tables,
     load_degrees,
     load_sidecar,
     read_repr_text,
@@ -99,6 +104,7 @@ __all__ = [
     # sidecar
     "SymbolMeta",
     "TextOffset",
+    "load_degree_tables",
     "load_degrees",
     "load_sidecar",
     "read_repr_text",
@@ -124,6 +130,8 @@ __all__ = [
     "unclosed_edges",
     # packing
     "CANDIDATE_SOURCES",
+    "HUB_SKIP_DEGREE",
+    "POOL_CAP",
     "Candidate",
     "CandidateSource",
     "DiscoveryContext",
@@ -132,8 +140,10 @@ __all__ = [
     "idf",
     "pack",
     "relevance",
+    "tokens_at",
     # admission
     "EXCEEDED",
+    "EXCEEDED_SUGGESTION",
     "OK",
     "CompileStats",
     "Compiler",

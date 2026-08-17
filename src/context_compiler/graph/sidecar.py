@@ -88,19 +88,27 @@ def load_sidecar(
     return table
 
 
-def load_degrees(
+def load_degree_tables(
     edges_path: str | Path, edge_types: tuple[str, ...] | None = None
-) -> dict[int, int]:
-    """Out-degree per symbol, for Sec 6.3's ``idf`` hub suppression.
+) -> tuple[dict[int, int], dict[int, int]]:
+    """``(out_degree, in_degree)`` per symbol, in one pass over the edge file.
 
-    Another scalar table, loaded application-side for the same reason as the
-    rest of the sidecar: a whole-graph degree count does not survive the
-    engine's deadline (A2.3), and every ranking decision needs it.
+    Two scalar tables, loaded application-side for the same reason as the rest
+    of the sidecar: a whole-graph degree count does not survive the engine's
+    deadline (A2.3), and every ranking decision needs one.
 
-    ``edge_types`` defaults to every relation in the file. Passing
+    * **out-degree** drives Sec 6.3's ``idf`` hub suppression. A caller that
+      calls 175 things tells you almost nothing about which of them you are
+      looking at.
+    * **in-degree** drives A3.1's hub skip. Reverse discovery on a symbol with
+      hundreds of callers costs seconds and yields nothing ``idf`` would rank.
+
+    Both come from the same pass, so the hub skip is a dict lookup rather than
+    new I/O. ``edge_types`` defaults to every relation in the file; passing
     ``HARD_EDGES`` restricts it to relations that actually propagate.
     """
-    degrees: dict[int, int] = {}
+    out_degree: dict[int, int] = {}
+    in_degree: dict[int, int] = {}
     keep = set(edge_types) if edge_types else None
     with open(edges_path, "rb") as fh:
         for raw in fh:
@@ -108,8 +116,17 @@ def load_degrees(
             if keep is not None and rec["type"] not in keep:
                 continue
             src = rec["src"]
-            degrees[src] = degrees.get(src, 0) + 1
-    return degrees
+            dst = rec["dst"]
+            out_degree[src] = out_degree.get(src, 0) + 1
+            in_degree[dst] = in_degree.get(dst, 0) + 1
+    return out_degree, in_degree
+
+
+def load_degrees(
+    edges_path: str | Path, edge_types: tuple[str, ...] | None = None
+) -> dict[int, int]:
+    """Out-degree per symbol. Thin wrapper over :func:`load_degree_tables`."""
+    return load_degree_tables(edges_path, edge_types)[0]
 
 
 def read_repr_text(path: str | Path, offset: TextOffset) -> dict:
