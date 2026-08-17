@@ -25,10 +25,22 @@ Round trips, for the acceptance gate:
      6   candidate envelope, one hop, because an L2 candidate propagates only
           to L1 and L1 is terminal
     ---
-    24   total
+    24   total, at six seeds and a candidate pool under B
+
+The envelope obeys the same Sec 5.1 chunking as any other frontier read, so it
+is `6 * ceil(|candidates|/B)`, not a flat 6. On 200 Django trials that is 6 on
+199 of them; the one trial with a 784-candidate pool paid 12 and totalled 30.
+The gate is a median, and the median is exactly 24.
 
 Demotion is free: every profile below P3 has a pointwise-smaller node set, so
 its closure is served entirely from the expansion cache.
+
+**Known non-optimality, accepted (Sec 6.3).** The scan takes the first profile
+whose *mandatory floor* fits and then packs the remainder. It never asks
+whether a lower profile with a richer optional set would have scored better --
+a P2 floor leaves more room for bundles than a P3 floor does, and on some
+tasks that trade would win. Sec 6.2 does not search that space, and neither
+does this. Documented, not fixed.
 """
 from __future__ import annotations
 

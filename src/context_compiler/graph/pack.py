@@ -19,8 +19,15 @@ Two things keep this affordable:
 * **Incremental cost.** ``CostState.delta_cost`` is O(|delta|) rather than
   O(|context|).
 
-The lazy-greedy fallback Sec 6.3 keeps in reserve is not needed at Django's
-observed pool sizes and is not implemented; see the results doc.
+The lazy-greedy fallback Sec 6.3 keeps in reserve is **not** implemented, and
+the measurements say it will eventually be needed. The loop below re-evaluates
+every surviving candidate on every iteration, which is O(admissions x pool).
+Across 200 Django trials that is 300 bundle evaluations at the median and 1.0 s
+per compile -- but the worst trial had a 784-candidate pool, ran 62,370
+evaluations and took 21.9 s, which is not an interactive latency. The
+re-evaluation is what makes shared dependencies pay off, so the fix is lazy
+greedy on the `score(y)/tokens_at(y)` upper bound rather than dropping it.
+Deferred, measured, and recorded in the results doc rather than pre-empted.
 
 Ranking is kept strictly separate from inclusion. A score never forces a node
 into the context; a mandatory rule never reads a score. A bundle's members are
