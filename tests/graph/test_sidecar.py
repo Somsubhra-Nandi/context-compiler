@@ -65,7 +65,7 @@ def test_text_blobs_are_excluded():
     assert "repr_L3_text" not in SymbolMeta._fields
 
 
-def test_field_set_matches_amendment_a1_1():
+def test_field_set_matches_amendment_a7():
     """A4.1 adds ``file`` and A7 adds traceback source ranges."""
     assert SymbolMeta._fields == (
         "fqn",
