@@ -268,3 +268,21 @@ this document and A5 happened to use.
 | A6.3 | Re-ingest + 200-trial re-validation vs A4's baseline, same seed pool and seed sets: P3 88.5% -> 97.0% (all of the gain from P1, 11.0% -> 2.5%); `token_margin` median -707 -> -308.5 (utilisation improves in aggregate, the opposite of A5.1's single-example finding, both true for different seed sets); I4 and I6 hold at 200/200 on both. |
 | A6.4 | §8.1 re-regenerated: closure size 120 -> 65 (A5) -> 47 (A6); identity hints that are artefacts: n/a -> 13/23 (A5) -> **0/22 (A6)**, every one individually traced to a real `CALLS`/`REFERENCES_TYPE` edge. |
 | Decision | A5.1's packing-side filter is kept as defense-in-depth. Old graph preserved at `~/out/django-pre-a6/`. Item 8's class-level seed risk (A5.3/A5.4) is closed, not just documented. |
+
+## A6.5 -- Pre-registration for back-propagation metrics
+
+The v1.3 §9 simulation predicted median closure 47, p90 83, 10/200 over
+8,000 tokens; the pre-A6 implementation produced 46, 86, 10. That validation
+ran against a graph since shown to carry 38,944 fabricated `CALLS` edges.
+Prediction for the corrected graph, registered before measurement:
+**closure sizes shrink**, because fabricated container edges are removed; the
+effect is **largest where a class or module was admitted at L2**, since those
+carried the bulk of the fabrication and re-expanded on hop 2. Median and p90
+should both fall; the over-budget count should fall or hold.
+
+The outcome will be reported using this pre-registered classification: it
+**holds** if the measured changes match the prediction; it **shifts with a
+mechanism** if the changes move in the predicted direction but one headline
+comparison differs; and it **breaks** if the measurements move against the
+prediction, in which case the original result will be scoped to the pre-A6
+graph.
