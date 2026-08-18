@@ -14,6 +14,10 @@ from neo4j.exceptions import ClientError, CypherSyntaxError, ServiceUnavailable
 BOLT_URI = "bolt://127.0.0.1:7687"
 AUTH = ("neo4j", "local-development-token-32-bytes")
 DATABASE = "default"
+FIXTURE_NODE_IDS = (
+    100101, 100102, 100201, 100202, 100301,
+    100401, 100402, 100403, 100501, 100502, 100601, 100602,
+)
 
 
 @pytest.fixture(scope="module")
@@ -32,6 +36,24 @@ def driver():
 def session(driver):
     with driver.session(database=DATABASE) as s:
         yield s
+
+
+@pytest.fixture(scope="module", autouse=True)
+def clean_fixture_nodes(driver):
+    """Keep compatibility fixtures out of the production graph contract."""
+    def cleanup():
+        with driver.session(database=DATABASE) as s:
+            # HydraDB's UNWIND write classifier does not support DELETE, so
+            # keep this explicit and bounded to the fixture IDs.
+            for node_id in FIXTURE_NODE_IDS:
+                s.run(
+                    "MATCH (n {id: $v}) DETACH DELETE n",
+                    v=node_id,
+                ).consume()
+
+    cleanup()
+    yield
+    cleanup()
 
 
 def rejects(session, query):

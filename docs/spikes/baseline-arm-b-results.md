@@ -83,7 +83,8 @@ undirected one-hop neighbourhood and fails the closure check on every trial.
 The compiler spends a median 24 reads to build and pack a smaller, structurally
 closed result.
 
-Raw per-trial measurements are in `/tmp/baseline-arm-b-200.json` from
+Raw per-trial measurements are in
+[`data/baseline-arm-b-200.json`](data/baseline-arm-b-200.json) from
 `scripts/validate_baseline_arm_b.py`. The captured full-output example is
 [`baseline-arm-b-example.md`](baseline-arm-b-example.md).
 
