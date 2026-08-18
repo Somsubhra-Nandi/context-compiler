@@ -8,7 +8,7 @@ Three tools, all read-only consumers of ``graph.compile`` and ``emit.render``:
 
 Everything that decides -- the fixpoint, the profile scan, the packer, the cost
 model -- lives in ``graph/`` and is untouched here. This module resolves seeds
-(``PLACEHOLDER(item-8)``, see ``seeds.py``), calls ``compile_context``/``emit``,
+(see ``seeds.py``), calls ``compile_context``/``emit``,
 and renders. State (sidecar, offset index, the one Bolt connection) is loaded
 once in ``main()`` before the stdio loop starts; see ``state.py``.
 
@@ -69,7 +69,13 @@ def _resolve_ids(task: str | None, seeds: list[str] | None, state: ServerState) 
     if seeds:
         return resolve_seeds(seeds, state.by_fqn)
     if task:
-        return resolve_task(task, state.sidecar)
+        return resolve_task(
+            task,
+            state.sidecar,
+            graph=state.expander,
+            reverse=state.reverse,
+            in_degrees=state.in_degrees,
+        )
     raise SeedResolutionError("either `task` or `seeds` must be given")
 
 
@@ -81,10 +87,12 @@ def compile_context(
 
     Give either `seeds` (explicit fully-qualified or unambiguous-suffix symbol
     names, e.g. `django.db.models.query.QuerySet.filter` or just
-    `QuerySet.filter`) or a `task` description. `seeds` is far more reliable --
-    task-based resolution is a PLACEHOLDER(item-8): a plain token-overlap match
-    against symbol names, not a real search. Pass explicit `seeds` whenever you
-    already know which symbol(s) the question is about.
+    `QuerySet.filter`) or a `task` description. Task resolution first parses
+    CPython traceback frames, then uses deterministic identifier similarity and
+    an optional connectivity rerank. Similarity is used only for entry; the
+    structural graph, not similarity, performs expansion. BM25, embeddings and
+    LLM proposal are not part of this scoped resolver. Pass explicit `seeds`
+    whenever you already know which symbol(s) the question is about.
 
     Returns the compiled context as text (declarations, bodies, provenance and
     an identity index, already grouped and budgeted) plus a trailing JSON block

@@ -94,9 +94,13 @@ them before starting the server.
 
 `seeds` accepts exact fully-qualified names or unambiguous suffixes
 (`QuerySet.filter` resolves to `django.db.models.query.QuerySet.filter`).
-Task-based resolution (matching a free-text description to symbols) is a
-`PLACEHOLDER(item-8)` — a plain token-overlap ranking, not real search — so
-prefer explicit `seeds` when you know them.
+Task-based resolution first parses CPython traceback frames through the
+sidecar's file/line ranges, then uses deterministic identifier similarity and a
+small connectivity rerank. Similarity is used for entry and rejected for
+expansion: structural closure follows graph edges, never similarity results.
+BM25, embeddings, and LLM proposal are deliberately out of scope for this
+session, so prefer explicit `seeds` when you know them. See
+`docs/spikes/seeds-item-8-results.md` for the worked Django traceback.
 
 ### Example
 

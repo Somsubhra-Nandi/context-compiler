@@ -27,6 +27,8 @@ class SymbolMeta(NamedTuple):
     identity_tokens: int
     provenance_tokens: int
     evaluable: bool | None
+    start_line: int = 0
+    end_line: int = 0
 
 
 @dataclass
@@ -84,6 +86,8 @@ def load_sidecar(
             identity_tokens=rec["identity_tokens"],
             provenance_tokens=rec["provenance_tokens"],
             evaluable=rec["evaluable"],
+            start_line=rec.get("start_line", 0),
+            end_line=rec.get("end_line", 0),
         )
         if offsets is not None:
             offsets[nid] = TextOffset(off, length)

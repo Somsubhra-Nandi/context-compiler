@@ -97,9 +97,9 @@ def test_all_three_tools_are_registered_with_expected_parameters():
     assert tools["impact_cone"].input_schema["required"] == ["fqn"]
 
 
-def test_tool_descriptions_mention_the_seed_placeholder():
+def test_tool_description_describes_scoped_task_resolution():
     tools = {t.name: t for t in asyncio.run(server.server.list_tools())}
-    assert "PLACEHOLDER(item-8)" in tools["compile_context"].description
+    assert "traceback" in tools["compile_context"].description.lower()
 
 
 # -- compile_context: happy path -------------------------------------------
