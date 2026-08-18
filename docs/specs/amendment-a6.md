@@ -73,6 +73,12 @@ unaffected; only over-collection is.
 Full suite: 291 passed, 3 skipped (up from 283/3 in A5 -- the 8 new tests),
 zero regressions.
 
+The A6-bis verification run executed `tests/unit`, `tests/mcp`, and
+`tests/integration`: **123 passed, 16 skipped**. `tests/graph/` was not counted
+because its HydraDB fixture was unavailable; an explicit attempt produced
+HydraDB connection errors, so the graph suite remains pending rather than being
+presented as a pass.
+
 ---
 
 ## A6.2 -- Re-extraction: edge counts, and Query specifically
@@ -143,6 +149,17 @@ budget, against A4.1's own quoted baseline:
 | `margin_fraction` median | -10.0% | **-6.0%** | +4.0 pts |
 | `token_margin > 0` (I4) | 0/200 | 0/200 | holds |
 | `is_closed` (I6) | 200/200 | 200/200 | holds |
+
+`validate_budget_django.py` calls this value `token_margin` and computes
+`actual emitted tokens - (cost(closure/packed levels) + emitted hint tokens)`.
+The budgeted term includes `6 * emitted + 13 * files + 100` in `cost()` and the
+hint reserve. The closure harness's `tokens` figure is instead the compiled
+mandatory closure's L3+L2 source tokens (`sum(repr_L3_tokens or
+repr_L2_tokens)`); it includes neither that framing term nor provenance,
+identities, packing, or hints. Thus the two medians measure budgeted cost slack
+versus emitted source cost, not the same quantity. For README utilisation quote
+the compiled total from A6.6, **5,602 / 8,000 = 70.0% median**, which includes
+the framing, metadata and hint costs actually admitted.
 
 **Both invariants hold exactly as before -- nothing about this fix touches
 I4 or I6's guarantee, only what the closure and packer see.** The headline
@@ -297,17 +314,16 @@ admission on the same seed sets.
 
 ### A6.5 outcome: holds
 
-The prediction holds. Mandatory closure size fell from the pre-A6
-46 / 86 / 10-over-8,000 comparison to **36 / 56 / 0** (median / p90 / max;
-0/200 over 8,000). The mechanism is the registered one: removing fabricated
+The prediction holds. Mandatory closure size fell from the pre-A6 comparison
+to **median 36, p90 56, max 114, over-8,000 count 0/200**. The mechanism is the registered one: removing fabricated
 container `CALLS` edges shrinks the second-hop closure, especially where a
 class or module had been admitted. The corrected closure also has 0/200
 source-cost trials over 8,000, versus 10/200 pre-A6. The simulation's 47
 median was therefore not preserved by tuning; the corrected graph is
 materially smaller.
 
-The mandatory closure's level composition moved from the pre-A6
-**6.0 L3 / 17.0 L2 / 29.8 L1** to **6.0 L3 / 16.0 L2 / 15.0 L1** at the
+The mandatory closure's level composition moved from the pre-A6 shape to
+**6.0 L3 / 16.0 L2 / 15.0 L1** at the
 median. Its emitted size is 22.0 symbols median (p90 31, max 62), and its
 L3+L2 source cost is 2,859.5 tokens median (p90 5,534, max 7,939).
 
@@ -324,13 +340,13 @@ L3+L2 source cost is 2,859.5 tokens median (p90 5,534, max 7,939).
 Admission was `OK`/P3 on 194 trials, demoted on 6 (P2: 1, P1: 5), and
 `CLOSURE_BUDGET_EXCEEDED` on 0. All 200 contexts were closed and within
 budget. Compile latency was **483.11 ms median / 1,549.99 ms p99** (max
-2,081.91 ms), improving substantially on the pre-A6 1,059 ms / 2,782 ms.
+2,081.91 ms), improving substantially on the pre-A6 run.
 
 Optional packing share is calculated per trial as
 `(compiled cost - mandatory floor cost) / compiled total`, with the 5% hint
 reserve included in the denominator. Its distribution was **0.0% minimum,
 18.7% median, 42.3% p90, 66.6% p99, 68.3% maximum**, versus the pre-A6 median
-claim of 50.4%. Optional tokens were 0 / **931.5** / 2,828 / 5,050 / 5,313
+claim. Optional tokens were 0 / **931.5** / 2,828 / 5,050 / 5,313
 (same order). The corrected graph therefore explains why the two-seed A6.4
 example is a thin-pool case: it is not representative of the six-seed
 distribution, but the six-seed distribution's optional share is also much
@@ -339,6 +355,10 @@ lower than the stale pre-A6 claim.
 The final packed context's level composition was **6.0 L3 / 28.0 L2 /
 34.5 L1** at the median. Packing increases the declaration tier from the
 mandatory floor's 15 L2 to 28 L2 while retaining the six seeds.
+
+The corrected one-line thesis is: **21 mandatory emitted symbols / 3,718.5
+tokens become 34 emitted symbols / 5,602 compiled tokens — 1.62x the emitted
+symbols and 1.51x the tokens, with an 18.7% median optional share.**
 
 ### Impact-cone latency
 

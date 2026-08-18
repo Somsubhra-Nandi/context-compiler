@@ -344,10 +344,10 @@ the most expensive closures *cheaper* in tokens (max 12,253 vs 20,272) because
 a node counted twice by the simulation is counted once here. The medians barely
 move because merging is rare near the middle of the distribution.
 
-Level composition, mean per trial: **6.0 L3** (the seeds) → **17.0 L2** →
-**29.8 L1**. Median emitted set (L2+L3) is 22 symbols. That shape is the thesis
-in one line: six seeds pull in about seventeen declarations and name about
-thirty more, for roughly 3,000 tokens.
+The pre-A6 level composition was **6.0 L3** (the seeds) → **17.0 L2** →
+roughly thirty L1. A6.6 supersedes that shape on the corrected graph:
+**6.0 L3 / 16.0 L2 / 15.0 L1** at the median, with 21 emitted floor symbols
+and 3,718.5 floor tokens.
 
 ---
 

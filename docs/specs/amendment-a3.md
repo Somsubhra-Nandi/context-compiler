@@ -133,12 +133,12 @@ The reason is worth understanding, because it is the propagation table working a
 ### Measured figures for the writeup
 
 ```
-mandatory floor          21 emitted symbols / 3,332 tokens
-compiled context         42 emitted symbols / 7,610 tokens     2.00x emitted, 4.57x lattice
-optional packing         50.4% of the compiled context
-utilisation              95.0% median, 99.95% max, 0/200 over budget
+mandatory floor          21 emitted symbols / 3,718.5 tokens
+compiled context         34 emitted symbols / 5,602 tokens     1.62x emitted
+optional packing         18.7% median of the compiled context
+utilisation              70.0% median, 99.95% max, 0/200 over budget
 round trips              24 median, 30 max
 I6 closure               200/200, verified by independent re-read
 I4 budget                200/200, max 7,996 of 8,000
-compile latency          994 ms median (pre-A3.4)
+compile latency          reported by the corrected A6 run; see amendment A6.6
 ```

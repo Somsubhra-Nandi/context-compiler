@@ -12,7 +12,7 @@ Item 5  profile monotonicity PASS   pointwise, on fixtures and on 20 real seed s
 Item 5  I6  is_closed        PASS   200/200 trials, verified by independent re-read
 Item 5  I4  budget respected PASS   200/200 trials, max 7,996 of 8,000
 Item 5  round trips          PASS   median 24, p90 24, max 30
-Item 5  packing              PASS   41 -> 187.5 symbols median, 4.57x the floor
+Item 5  packing              PASS   21 -> 34 emitted symbols median, 1.62x the floor
 ```
 
 One new engine constraint, **A3.1**, and it is load-bearing: there is no

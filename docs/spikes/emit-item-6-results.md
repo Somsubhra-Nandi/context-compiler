@@ -480,8 +480,8 @@ python scripts/validate_budget_django.py --verify-closure --out /tmp/cc-final.js
 | Candidate pool, max | 784 | **150** | A3.4 cap |
 | Bundle evaluations, max | 62,370 | **8,910** | — |
 | Round trips, median / max | 24 / 30 | **24 / 24** | 24 median |
-| Latency, median | 994 ms | **1,059 ms** | interactive |
-| Latency, **p99** | — | **2,782 ms** | **< 3,000 ms** |
+| Latency, median | historical pre-A6 run | superseded by A6.6 | interactive |
+| Latency, **p99** | — | superseded by A6.6 | **< 3,000 ms** |
 | Latency, max | 21,854 ms | **3,941 ms** | — |
 
 **A3.4's target is met: p99 = 2,782 ms.** It is met without much room, and the
