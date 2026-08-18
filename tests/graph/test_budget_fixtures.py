@@ -78,9 +78,10 @@ def meta(
     prov: int = 5,
     kind: str = "function",
     file: str = "pkg/mod.py",
+    fqn: str | None = None,
 ) -> SymbolMeta:
     return SymbolMeta(
-        fqn=f"pkg.sym{node}",
+        fqn=fqn if fqn is not None else f"pkg.sym{node}",
         kind=kind,
         file=file,
         repr_L2_tokens=t2,
@@ -895,3 +896,48 @@ def test_compile_is_deterministic():
     b = build(edges, sidecar).compile_context([1], 8_000)
     assert a.levels == b.levels
     assert a.cost == b.cost
+
+
+# =======================================================================
+# 9. Amendment A5 -- a seed's own module/class is not its caller
+# =======================================================================
+
+
+def test_containing_module_and_class_are_excluded_from_candidates():
+    """A5: reverse CALLS off the seed's module/class is a containment edge,
+    not a caller -- see extract/ast_occurrences.py's ``occurrence_nodes``,
+    which (mis)attributes calls nested anywhere inside a module or class to
+    that module/class symbol itself, not only to the function that makes them.
+    """
+    seed = 1
+    real_caller = 2
+    module_sym = 10
+    class_sym = 11
+    edges = [
+        (real_caller, "CALLS", seed),
+        (module_sym, "CALLS", seed),
+        (class_sym, "CALLS", seed),
+    ]
+    sidecar = {
+        seed: meta(seed, fqn="pkg.mod.Thing.method"),
+        real_caller: meta(real_caller, fqn="pkg.mod.Other.caller"),
+        module_sym: meta(module_sym, kind="module", fqn="pkg.mod"),
+        class_sym: meta(class_sym, kind="class", fqn="pkg.mod.Thing"),
+    }
+    ctx = DiscoveryContext(reverse=StubReverse(edges), edges={}, sidecar=sidecar)
+    got = build_candidates([seed], (StaticCallerSource(),), ctx, {}, 100)
+    assert [c.node for c in got] == [real_caller]
+
+
+def test_containment_exclusion_requires_a_strict_dotted_prefix():
+    """A sibling under the same module name-prefix must not be swept up too."""
+    seed = 1
+    sibling = 2  # "pkg.mod.Thing2" is not a dotted-prefix ancestor of the seed
+    edges = [(sibling, "CALLS", seed)]
+    sidecar = {
+        seed: meta(seed, fqn="pkg.mod.Thing.method"),
+        sibling: meta(sibling, fqn="pkg.mod.Thing2"),
+    }
+    ctx = DiscoveryContext(reverse=StubReverse(edges), edges={}, sidecar=sidecar)
+    got = build_candidates([seed], (StaticCallerSource(),), ctx, {}, 100)
+    assert [c.node for c in got] == [sibling]
