@@ -86,21 +86,67 @@ closed result.
 Raw per-trial measurements are in
 [`data/baseline-arm-b-200.json`](data/baseline-arm-b-200.json) from
 `scripts/validate_baseline_arm_b.py`. The captured full-output example is
-[`baseline-arm-b-example.md`](baseline-arm-b-example.md).
+[`baseline-arm-b-example.md`](baseline-arm-b-example.md). A second,
+causal-structure comparison on a real traceback's seeds is in
+[`demo-side-by-side.md`](demo-side-by-side.md).
 
 ## Verification
 
-The mandated command was run against the real HydraDB:
+The initial mandated command was run against the real HydraDB:
 
 ```text
 python -m pytest tests/unit tests/mcp tests/integration tests/graph -q
 315 passed, 3 skipped, 2 failed
 ```
 
-The two failures are external graph-state consistency checks, not Arm B
-assertions: HydraDB contains 43,432 `Symbol` / 21,967 `Test` nodes while the
-sidecar contract expects 43,420 / 21,966. No mock or substitute graph was used.
-The new Arm B suite itself passes: **5 passed**.
+The initial diagnosis recorded here was wrong: the two failures were not an
+unexplained graph-state drift. The live counts were 43,432 `Symbol` / 21,967
+`Test` against the sidecar's 43,420 / 21,966 because twelve explicit
+`100xxx` compatibility-test fixture nodes had been left in the graph. Their
+FQNs were `compat.write.a`, `compat.write.b`, `compat.edge.src`,
+`compat.edge.dst`, `tests.compat.test_it`, `a`, `b`, `c`, `a`, `b`,
+`compat.mspaths.src`, and `compat.mspaths.dst`; all had `file: null`, and the
+single extra `Test` was `tests.compat.test_it`. They were not Django symbols.
+The compatibility suite now removes only its own fixture IDs before and after
+the module, and the stale fixtures were removed with a targeted cleanup.
+
+The other stale graph-suite expectation was latent rather than one of those
+two failures: `EXPECTED_MANDATORY_EDGES = 116,758` was pre-A6. A6.2's
+post-A6 `edges.jsonl` has 84,963 total edges, including 7,149 stored
+`INHERITS_FROM` edges, so the mandatory total is 77,814. The test now derives
+that value from `edges.jsonl` rather than hardcoding it. No mock or substitute
+graph was used. The new Arm B suite itself passes: **5 passed**.
+
+After the targeted cleanup and compatibility-test teardown fix, the mandated
+four-suite command was rerun against the real HydraDB:
+
+```text
+python -m pytest tests/unit tests/mcp tests/integration tests/graph -q
+318 passed, 3 skipped, 0 failed
+```
+
+The suites run were `tests/unit`, `tests/mcp`, `tests/integration`, and
+`tests/graph`. The three skips are the graph suite's opt-in full read-back
+checks, which remain gated behind `CC_FULL_VERIFY=1`.
+
+## Do the 200-trial numbers need re-measurement?
+
+No. The twelve leaked compatibility-test fixture nodes were present in the
+live graph while the mandated four-suite command ran, which is the same
+window the 200-trial Arm B measurement in `data/baseline-arm-b-200.json` was
+taken in, but their presence cannot have reached either arm's compiled
+context. Both `Expander` and `ReverseReader` (`src/context_compiler/graph/expand.py`,
+lines 112 and 270) take a `membership` mapping — the loaded sidecar — and drop
+any destination node not in it before returning edges. The fixture nodes
+(`compat.write.a`, `compat.edge.src`, `tests.compat.test_it`, and the rest) are
+not in `symbols.jsonl` and so are never in `sidecar`; every read either arm
+performs filters them out before scoring, ranking, or admission ever sees
+them. Compiler closure, Arm B's one-hop ranking, and `idf()`'s degree table
+are therefore identical whether or not those twelve nodes exist in the graph
+at read time. The stale `EXPECTED_MANDATORY_EDGES` constant is a separate,
+unrelated defect (a pre-A6 literal, fixed above by deriving the expected count
+from `edges.jsonl`) and likewise does not touch the 200-trial figures, which
+never read that test constant.
 
 ## Arm A stretch outcome
 
