@@ -150,16 +150,22 @@ budget, against A4.1's own quoted baseline:
 | `token_margin > 0` (I4) | 0/200 | 0/200 | holds |
 | `is_closed` (I6) | 200/200 | 200/200 | holds |
 
-`validate_budget_django.py` calls this value `token_margin` and computes
-`actual emitted tokens - (cost(closure/packed levels) + emitted hint tokens)`.
-The budgeted term includes `6 * emitted + 13 * files + 100` in `cost()` and the
-hint reserve. The closure harness's `tokens` figure is instead the compiled
-mandatory closure's L3+L2 source tokens (`sum(repr_L3_tokens or
-repr_L2_tokens)`); it includes neither that framing term nor provenance,
-identities, packing, or hints. Thus the two medians measure budgeted cost slack
-versus emitted source cost, not the same quantity. For README utilisation quote
-the compiled total from A6.6, **5,602 / 8,000 = 70.0% median**, which includes
-the framing, metadata and hint costs actually admitted.
+The A6.3 row is labelled `token_margin`, but its exact producer is
+`validate_emit_django.py` (`validate_budget_django.py` has no field with that
+name): `actual emitted tokens - (cost(closure/packed levels) + emitted hint
+tokens)`. Both sides therefore count rendered framing; the budgeted side's
+`cost()` includes `6 * emitted + 13 * files + 100`, and both sides include the
+actual hints admitted from the 5% reserve. It is emitted-minus-budgeted slack,
+not a utilisation figure, so **-308.5 does not imply 7,691 tokens**.
+
+The closure harness's `tokens` formula is only
+`sum(repr_L3_tokens or repr_L2_tokens)` for the mandatory L3/L2 closure; it
+includes neither framing, provenance, identities, packing, nor hints. The
+A6.6 `compiled total tokens (hints included)` value is the budget harness's
+`ctx.cost + ctx.hint_tokens`: a budgeted cost that includes framing, metadata,
+packing, and admitted hints. For README utilisation quote that measured total,
+**5,602 / 8,000 = 70.0% median**. The two medians measure different things;
+neither number was adjusted.
 
 **Both invariants hold exactly as before -- nothing about this fix touches
 I4 or I6's guarantee, only what the closure and packer see.** The headline
