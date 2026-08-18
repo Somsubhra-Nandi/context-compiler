@@ -77,23 +77,46 @@ def qualified_name(expr: ast.AST) -> str | None:
     return None
 
 
+def _own_scope(node: ast.AST) -> list[ast.AST]:
+    """Every descendant of ``node``, without descending into a nested
+    ``FunctionDef``/``AsyncFunctionDef``/``ClassDef``'s own body.
+
+    ``ast.walk`` cannot do this: it enqueues every descendant up front, so a
+    ``continue`` in a caller's loop only skips classifying the node it was
+    given -- it cannot stop already-queued grandchildren from being yielded
+    later. A nested def has its own ``Symbol`` and its own occurrence scan;
+    a call two scopes down inside one belongs to it, never to whatever
+    contains it (Amendment A5.2/A6).
+    """
+    out: list[ast.AST] = []
+    for child in ast.iter_child_nodes(node):
+        out.append(child)
+        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out.extend(_own_scope(child))
+    return out
+
+
 def occurrence_nodes(symbol: Symbol) -> list[tuple[str, ast.AST]]:
-    """Return (edge type, identifier AST node) within a symbol's own region."""
+    """Return (edge type, identifier AST node) within a symbol's own scope.
+
+    A class's own scope is its decorators, bases and class-level statements --
+    not its methods' bodies. A module's own scope is its imports, module-level
+    statements and decorators -- not its functions'. A function's own scope is
+    its own signature and body -- not any function or class nested inside it.
+    """
     out: list[tuple[str, ast.AST]] = []
     root = symbol.node
-    for node in ast.walk(root):
-        if node is not root and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            continue
+    if isinstance(root, ast.ClassDef):
+        out.extend(("REFERENCES_TYPE", base) for base in root.bases)
+        out.extend(("DECORATED_BY", decorator) for decorator in root.decorator_list)
+    elif isinstance(root, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        annotations = [a.annotation for a in root.args.args + root.args.kwonlyargs if a.annotation]
+        if root.args.vararg and root.args.vararg.annotation: annotations.append(root.args.vararg.annotation)
+        if root.args.kwarg and root.args.kwarg.annotation: annotations.append(root.args.kwarg.annotation)
+        if root.returns: annotations.append(root.returns)
+        out.extend(("REFERENCES_TYPE", annotation) for annotation in annotations)
+        out.extend(("DECORATED_BY", decorator) for decorator in root.decorator_list)
+    for node in _own_scope(root):
         if isinstance(node, ast.Call):
             out.append(("CALLS", node.func))
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            annotations = [a.annotation for a in node.args.args + node.args.kwonlyargs if a.annotation]
-            if node.args.vararg and node.args.vararg.annotation: annotations.append(node.args.vararg.annotation)
-            if node.args.kwarg and node.args.kwarg.annotation: annotations.append(node.args.kwarg.annotation)
-            if node.returns: annotations.append(node.returns)
-            out.extend(("REFERENCES_TYPE", annotation) for annotation in annotations)
-            out.extend(("DECORATED_BY", decorator) for decorator in node.decorator_list)
-        elif isinstance(node, ast.ClassDef):
-            out.extend(("REFERENCES_TYPE", base) for base in node.bases)
-            out.extend(("DECORATED_BY", decorator) for decorator in node.decorator_list)
     return out

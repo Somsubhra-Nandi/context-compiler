@@ -263,6 +263,22 @@ def tokens_at(meta: SymbolMeta, level: Level) -> int:
     return 1
 
 
+def _contains(container_fqn: str, member_fqn: str) -> bool:
+    """True if ``container_fqn`` is a strict dotted-prefix ancestor of ``member_fqn``.
+
+    Python FQNs nest hierarchically (``module.Class.method``), so this is
+    exactly containment: a module or class whose FQN prefixes a seed's FQN is
+    that seed's enclosing scope, never something the seed calls. Amendment A5
+    found the extraction layer emitting a reverse ``CALLS`` edge from a
+    module/class symbol to members nested anywhere inside it (``occurrence_nodes``
+    walks the whole subtree, not just the symbol's own scope -- see
+    ``extract/ast_occurrences.py``), which otherwise surfaces as e.g. the
+    ``django.db.models.sql.query`` module and ``Query`` class both being
+    admitted as ``OPTIONAL:static_caller`` of ``Query.build_filter``.
+    """
+    return member_fqn.startswith(container_fqn + ".")
+
+
 def build_candidates(
     seeds: Sequence[int],
     sources: Sequence[CandidateSource],
@@ -276,7 +292,9 @@ def build_candidates(
 
     A candidate already emitted in the mandatory floor is dropped: it is
     included by rule, so proposing it is a no-op. Seeds are dropped for the
-    same reason.
+    same reason. **A5: a candidate whose FQN is a strict prefix of a seed's
+    FQN is dropped too** -- a symbol's containing class or module is not its
+    caller, regardless of which source proposed it or what edge said otherwise.
 
     **A3.4: the pool is capped at ``cap`` candidates, ranked by the
     ``score/tokens_at`` upper bound.** The Sec 6.3 loop re-evaluates every
@@ -292,12 +310,15 @@ def build_candidates(
     stays**, because it is what makes shared dependencies pay off.
     """
     exclude = exclude or set()
+    seed_fqns = tuple(ctx.sidecar[s].fqn for s in seeds if s in ctx.sidecar)
     best: dict[int, Candidate] = {}
     for source in sources:
         if not source.available:
             continue
         for node, links in source.find(seeds, ctx).items():
             if node in exclude or node in seeds or node not in ctx.sidecar:
+                continue
+            if any(_contains(ctx.sidecar[node].fqn, seed_fqn) for seed_fqn in seed_fqns):
                 continue
             score = relevance(source, links) * idf(node, degrees, n_symbols) * source.confidence
             cand = Candidate(node=node, source=source, links=links, score=score)
