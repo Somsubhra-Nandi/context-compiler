@@ -366,6 +366,28 @@ The corrected one-line thesis is: **21 mandatory emitted symbols / 3,718.5
 tokens become 34 emitted symbols / 5,602 compiled tokens — 1.62x the emitted
 symbols and 1.51x the tokens, with an 18.7% median optional share.**
 
+### Emitted versus named counts
+
+The **21** figure is the mandatory floor's median **emitted** count: L2/L3
+symbols that produce code blocks. The corresponding **36** figure is the
+median **named** count: all closure members, including the zero-cost L1
+lattice identities. These are two views of the same context, not conflicting
+measurements. The level composition above makes the distinction explicit
+(6 L3 + 16 L2 + 15 L1 = 37 for the rounded illustrative composition; the
+reported median emitted/named statistics are calculated independently).
+
+For the compiled row, **34** is likewise the median emitted count and **5,602**
+is the median compiled budgeted total including hints. The README quotes the
+floor row as **21 emitted / 3,718.5 tokens** to describe the mandatory baseline,
+and quotes the compiled row as **34 emitted / 5,602 tokens** for the headline
+result; neither row uses the other's count.
+
+The same 200-trial run measured candidate supply at **12.0 candidates / 11.0
+admitted** (median), not 8.0 / 8.0. The packer admits nearly all candidates,
+but not every candidate. Candidate supply, rather than the budget, remains the
+binding constraint at roughly 70% utilisation; this is the stated reason for
+cutting Item 9.
+
 ### Impact-cone latency
 
 The same eight real probes in the 150--500 in-degree band were measured

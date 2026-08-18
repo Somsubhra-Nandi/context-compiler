@@ -66,9 +66,7 @@ def test_text_blobs_are_excluded():
 
 
 def test_field_set_matches_amendment_a1_1():
-    """A4.1 adds ``file``, read straight from ``symbols.jsonl`` with no
-    re-extraction, so the framing term in ``cost()`` can charge per distinct
-    file (Sec 7.1's grouping)."""
+    """A4.1 adds ``file`` and A7 adds traceback source ranges."""
     assert SymbolMeta._fields == (
         "fqn",
         "kind",
@@ -80,6 +78,8 @@ def test_field_set_matches_amendment_a1_1():
         "identity_tokens",
         "provenance_tokens",
         "evaluable",
+        "start_line",
+        "end_line",
     )
 
 

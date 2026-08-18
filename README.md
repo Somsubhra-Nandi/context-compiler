@@ -115,6 +115,13 @@ one tool call.
 See `docs/spikes/mcp-item-7-results.md` for the verbatim transcript and two
 more (`explain_inclusion`, `impact_cone`).
 
+The 200-trial A6 baseline separates the mandatory floor from the compiled
+context: **21 emitted / 3,718.5 tokens** at the floor, versus **34 emitted /
+5,602 tokens** after packing (median, 8,000-token budget). “Emitted” counts
+L2/L3 code blocks; “named” also includes zero-cost L1 identities. Candidate
+supply is the binding constraint at this utilisation: 12.0 candidates and
+11.0 admissions at the median.
+
 ## Development
 
 ```bash
