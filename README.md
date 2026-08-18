@@ -122,6 +122,11 @@ L2/L3 code blocks; “named” also includes zero-cost L1 identities. Candidate
 supply is the binding constraint at this utilisation: 12.0 candidates and
 11.0 admissions at the median.
 
+Item 10a's controlled comparison is against **graph-ranked top-k without
+structural closure** (Arm B). The vector top-k arm is the obvious next arm.
+The Arm A stretch was abandoned after the pinned CodeBERT download failed to
+complete within its 20-minute limit; no vector measurements are claimed.
+
 ## Development
 
 ```bash

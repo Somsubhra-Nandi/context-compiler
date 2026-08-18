@@ -100,3 +100,16 @@ The two failures are external graph-state consistency checks, not Arm B
 assertions: HydraDB contains 43,432 `Symbol` / 21,967 `Test` nodes while the
 sidecar contract expects 43,420 / 21,966. No mock or substitute graph was used.
 The new Arm B suite itself passes: **5 passed**.
+
+## Arm A stretch outcome
+
+Arm A was attempted only after Arm B was complete and committed. Installing
+`sentence-transformers==3.4.1` completed, but the pinned code model
+`microsoft/codebert-base` revision
+`3b0952feddeffad0063f274080e3c23d75e7eb39` did not finish loading/downloading
+within the bounded stretch window. The embedding log ends at the library's
+“creating a new one with mean pooling” step; the partial Hugging Face cache was
+953 MB and the symbol embedding cache contained zero vectors. Arm A was
+abandoned without debugging around the timeout and has no reported metrics.
+The controlled comparison is therefore graph ranking without closure; vector
+top-k is the obvious next arm.
