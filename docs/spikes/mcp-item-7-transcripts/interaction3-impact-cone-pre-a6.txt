@@ -1,0 +1,300 @@
+[assistant]
+This calls for `impact_cone`, which needs the context-compiler MCP server — it's currently reconnecting. Let me check if it's back up.
+
+[tool call: ToolSearch]  input={"query": "impact_cone", "max_results": 5}
+
+[assistant]
+It's back. Running the reverse-call closure for `Query.build_filter`.
+
+[tool call: mcp__context-compiler__impact_cone]  input={"fqn": "django.db.models.sql.query.Query.build_filter"}
+
+[tool result block 0]
+Potentially affected by changes to django.db.models.sql.query.Query.build_filter
+(reverse CALLS closure, an over-approximation of what is potentially affected)
+
+78 symbol(s) found, depth reached 2:
+  depth 1: 5
+  depth 2: 73
+
+Top 30 by relevance, grouped by file:
+# django/db/backends/base/schema.py
+  db_default_sql  depth 2  idf 9.069
+# django/db/models/constraints.py
+  _get_condition_sql  depth 2  idf 9.292
+  _get_check_sql  depth 2  idf 9.292
+# django/db/models/fields/generated.py
+  contribute_to_class  depth 2  idf 9.292
+# django/db/models/indexes.py
+  _get_condition_sql  depth 2  idf 9.292
+# django/db/models/query.py
+  __init__  depth 2  idf 9.58
+  __init__  depth 2  idf 9.58
+# django/db/models/sql/query.py
+  build_where  depth 1  idf 9.986
+  add_q  depth 2  idf 9.292
+# tests/composite_pk/test_names_to_path.py
+  test_pk  depth 2  idf 9.292
+  test_id  depth 2  idf 9.292
+  test_tenant_id  depth 2  idf 9.069
+  test_user_id  depth 2  idf 9.069
+  test_comments  depth 2  idf 9.069
+# tests/queries/test_query.py
+  test_names_to_path_field_error  depth 2  idf 9.292
+  test_iterable_lookup_value  depth 2  idf 9.292
+  test_clone_select_related  depth 2  idf 9.292
+  test_negated_nullable  depth 2  idf 9.069
+  test_foreign_key_exclusive  depth 2  idf 9.069
+  test_foreign_key  depth 2  idf 9.069
+  test_foreign_key_f  depth 2  idf 9.069
+  test_non_alias_cols_query  depth 2  idf 9.069
+  test_simple_query  depth 2  idf 9.069
+  test_filter_conditional  depth 2  idf 9.069
+  test_names_to_path_field  depth 2  idf 9.069
+  test_complex_query  depth 2  idf 9.069
+  test_filter_non_conditional  depth 2  idf 8.887
+# tests/queries/test_sqlcompiler.py
+  test_repr  depth 2  idf 9.58
+  test_execute_sql_suppresses_cursor_closing_failure_on_exception  depth 2  idf 9.069
+  test_quote_name_unless_alias_deprecation  depth 2  idf 8.887
+
+[tool result block 1]
+{
+  "root": "django.db.models.sql.query.Query.build_filter",
+  "depth_reached": 2,
+  "counts_by_depth": {
+    "1": 5,
+    "2": 73
+  },
+  "truncated": false,
+  "truncation_reason": "",
+  "hubs_skipped": [],
+  "top": [
+    {
+      "node": 3493804636799502778,
+      "fqn": "django.db.models.sql.query.Query.build_where",
+      "file": "django/db/models/sql/query.py",
+      "depth": 1,
+      "idf": 9.986
+    },
+    {
+      "node": 5776314317805980149,
+      "fqn": "tests.queries.test_sqlcompiler.SQLCompilerTest.test_repr",
+      "file": "tests/queries/test_sqlcompiler.py",
+      "depth": 2,
+      "idf": 9.58
+    },
+    {
+      "node": 6005228658678048013,
+      "fqn": "django.db.models.query.RawQuerySet.__init__",
+      "file": "django/db/models/query.py",
+      "depth": 2,
+      "idf": 9.58
+    },
+    {
+      "node": 7024926754145023737,
+      "fqn": "django.db.models.query.QuerySet.__init__",
+      "file": "django/db/models/query.py",
+      "depth": 2,
+      "idf": 9.58
+    },
+    {
+      "node": 187152474028177163,
+      "fqn": "tests.composite_pk.test_names_to_path.NamesToPathTests.test_pk",
+      "file": "tests/composite_pk/test_names_to_path.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 189131687469704478,
+      "fqn": "django.db.models.fields.generated.GeneratedField.contribute_to_class",
+      "file": "django/db/models/fields/generated.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 2080596281292567725,
+      "fqn": "django.db.models.constraints.UniqueConstraint._get_condition_sql",
+      "file": "django/db/models/constraints.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 2524253732886804361,
+      "fqn": "django.db.models.constraints.CheckConstraint._get_check_sql",
+      "file": "django/db/models/constraints.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 3621929390209479657,
+      "fqn": "tests.queries.test_query.TestQueryNoModel.test_names_to_path_field_error",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 4197897839030955456,
+      "fqn": "django.db.models.indexes.Index._get_condition_sql",
+      "file": "django/db/models/indexes.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 4627918388883030482,
+      "fqn": "tests.composite_pk.test_names_to_path.NamesToPathTests.test_id",
+      "file": "tests/composite_pk/test_names_to_path.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 7398697248905346898,
+      "fqn": "tests.queries.test_query.TestQuery.test_iterable_lookup_value",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 7551293738618524564,
+      "fqn": "django.db.models.sql.query.Query.add_q",
+      "file": "django/db/models/sql/query.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 8448995036139677388,
+      "fqn": "tests.queries.test_query.TestQuery.test_clone_select_related",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.292
+    },
+    {
+      "node": 271379424754379461,
+      "fqn": "tests.queries.test_query.TestQuery.test_negated_nullable",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 672242267677737159,
+      "fqn": "tests.queries.test_query.TestQuery.test_foreign_key_exclusive",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 1309795331136427766,
+      "fqn": "tests.queries.test_sqlcompiler.SQLCompilerTest.test_execute_sql_suppresses_cursor_closing_failure_on_exception",
+      "file": "tests/queries/test_sqlcompiler.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 1710447575235128904,
+      "fqn": "tests.queries.test_query.TestQuery.test_foreign_key",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 3027638965029403947,
+      "fqn": "tests.queries.test_query.TestQuery.test_foreign_key_f",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 3446865636899062628,
+      "fqn": "tests.queries.test_query.TestQuery.test_non_alias_cols_query",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 3903869108186232263,
+      "fqn": "tests.composite_pk.test_names_to_path.NamesToPathTests.test_tenant_id",
+      "file": "tests/composite_pk/test_names_to_path.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 4038714914742181984,
+      "fqn": "tests.composite_pk.test_names_to_path.NamesToPathTests.test_user_id",
+      "file": "tests/composite_pk/test_names_to_path.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 4064820301940875941,
+      "fqn": "django.db.backends.base.schema.BaseDatabaseSchemaEditor.db_default_sql",
+      "file": "django/db/backends/base/schema.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 4751352786827886167,
+      "fqn": "tests.queries.test_query.TestQuery.test_simple_query",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 5408749568720697729,
+      "fqn": "tests.queries.test_query.TestQuery.test_filter_conditional",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 6462039756735853209,
+      "fqn": "tests.queries.test_query.TestQueryNoModel.test_names_to_path_field",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 7021058161257285735,
+      "fqn": "tests.composite_pk.test_names_to_path.NamesToPathTests.test_comments",
+      "file": "tests/composite_pk/test_names_to_path.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 8003283183032436853,
+      "fqn": "tests.queries.test_query.TestQuery.test_complex_query",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 9.069
+    },
+    {
+      "node": 491654297069477889,
+      "fqn": "tests.queries.test_sqlcompiler.SQLCompilerTest.test_quote_name_unless_alias_deprecation",
+      "file": "tests/queries/test_sqlcompiler.py",
+      "depth": 2,
+      "idf": 8.887
+    },
+    {
+      "node": 2149311997209231115,
+      "fqn": "tests.queries.test_query.TestQuery.test_filter_non_conditional",
+      "file": "tests/queries/test_query.py",
+      "depth": 2,
+      "idf": 8.887
+    }
+  ],
+  "seconds": 0.417
+}
+
+[assistant]
+Reverse-call closure for `Query.build_filter` — 78 symbols total within 2 hops (not truncated, no hubs skipped). Remember: this is an over-approximation of *reachability*, not a claim about what actually breaks.
+
+**Depth 1 — direct callers (5 total, only 1 in the top-30 relevance cut):**
+- `Query.build_where` (`django/db/models/sql/query.py`) — the other main entry point that calls `build_filter` directly (alongside `_add_q`, which we saw last turn). The other 4 direct callers exist in the closure but scored below the top-30 relevance cutoff, so they're not named here.
+
+**Depth 2 — everything reachable through those callers (73 total):**
+- **ORM internals**: `Query.add_q`, `QuerySet.__init__`, `RawQuerySet.__init__` — i.e. queryset construction paths that build filters.
+- **Constraints & indexes**: `UniqueConstraint._get_condition_sql`, `CheckConstraint._get_check_sql`, `Index._get_condition_sql`, `GeneratedField.contribute_to_class`, `BaseDatabaseSchemaEditor.db_default_sql` — these all resolve conditional expressions through `Query`, which is why a `build_filter` change can ripple into DDL/schema generation for conditional constraints, indexes, and generated fields, not just `.filter()` calls.
+- **Test suite**: a large chunk of `tests/queries/test_query.py` (foreign keys, negation/nullable handling, complex/simple queries, `Q` conditionals), `tests/composite_pk/test_names_to_path.py` (composite primary key path resolution), and a few `tests/queries/test_sqlcompiler.py` cases.
+
+**Practical read:** the blast radius isn't limited to `.filter()`/`.exclude()` — because `build_filter` backs `build_where`, changes here also touch how conditional `UniqueConstraint`/`CheckConstraint`/`Index` SQL and generated-field defaults get built. If you change `build_filter`, at minimum re-run `tests/queries/test_query.py`, `tests/composite_pk/test_names_to_path.py`, and the constraint/index test suites — the composite-PK tests in particular suggest this method is load-bearing for multi-column PK lookups.
+
+[session summary] turns=3 duration_api_ms=21534 is_error=False
+

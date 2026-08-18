@@ -286,3 +286,70 @@ mechanism** if the changes move in the predicted direction but one headline
 comparison differs; and it **breaks** if the measurements move against the
 prediction, in which case the original result will be scoped to the pre-A6
 graph.
+
+## A6.6 -- Back-propagated measurements on the corrected graph
+
+The pre-registered 200-trial run used the same 1,891 eligible seeds, six
+seeds per trial, `rng_seed=20260817`, and an 8,000-token budget. The dedicated
+closure harness ran against the corrected 43,420-symbol sidecar and the live
+HydraDB graph; the budget harness independently verified closure and budget
+admission on the same seed sets.
+
+### A6.5 outcome: holds
+
+The prediction holds. Mandatory closure size fell from the pre-A6
+46 / 86 / 10-over-8,000 comparison to **36 / 56 / 0** (median / p90 / max;
+0/200 over 8,000). The mechanism is the registered one: removing fabricated
+container `CALLS` edges shrinks the second-hop closure, especially where a
+class or module had been admitted. The corrected closure also has 0/200
+source-cost trials over 8,000, versus 10/200 pre-A6. The simulation's 47
+median was therefore not preserved by tuning; the corrected graph is
+materially smaller.
+
+The mandatory closure's level composition moved from the pre-A6
+**6.0 L3 / 17.0 L2 / 29.8 L1** to **6.0 L3 / 16.0 L2 / 15.0 L1** at the
+median. Its emitted size is 22.0 symbols median (p90 31, max 62), and its
+L3+L2 source cost is 2,859.5 tokens median (p90 5,534, max 7,939).
+
+### 200-trial budget and packing figures
+
+| Measure | Min | Median | P90 | P99 | Max |
+|---|---:|---:|---:|---:|---:|
+| mandatory floor tokens | 1,805 | **3,718.5** | 6,203 | 7,541 | 7,586 |
+| mandatory floor emitted symbols | 6 | **21** | 30 | 43 | 55 |
+| compiled total tokens (hints included) | 2,497 | **5,602** | 7,911 | 7,990 | 7,996 |
+| compiled emitted symbols | 10 | **34** | 51 | 72 | 73 |
+| round trips | 18 | **24** | 24 | 24 | 24 |
+
+Admission was `OK`/P3 on 194 trials, demoted on 6 (P2: 1, P1: 5), and
+`CLOSURE_BUDGET_EXCEEDED` on 0. All 200 contexts were closed and within
+budget. Compile latency was **483.11 ms median / 1,549.99 ms p99** (max
+2,081.91 ms), improving substantially on the pre-A6 1,059 ms / 2,782 ms.
+
+Optional packing share is calculated per trial as
+`(compiled cost - mandatory floor cost) / compiled total`, with the 5% hint
+reserve included in the denominator. Its distribution was **0.0% minimum,
+18.7% median, 42.3% p90, 66.6% p99, 68.3% maximum**, versus the pre-A6 median
+claim of 50.4%. Optional tokens were 0 / **931.5** / 2,828 / 5,050 / 5,313
+(same order). The corrected graph therefore explains why the two-seed A6.4
+example is a thin-pool case: it is not representative of the six-seed
+distribution, but the six-seed distribution's optional share is also much
+lower than the stale pre-A6 claim.
+
+The final packed context's level composition was **6.0 L3 / 28.0 L2 /
+34.5 L1** at the median. Packing increases the declaration tier from the
+mandatory floor's 15 L2 to 28 L2 while retaining the six seeds.
+
+### Impact-cone latency
+
+The same eight real probes in the 150--500 in-degree band were measured
+against the corrected graph. Latencies were 3,247.80 ms, 5,402.68 ms,
+424.07 ms, 3,223.81 ms, 394.01 ms, 3,270.13 ms, 2,518.98 ms, and 2,780.13
+ms: **3,001.97 ms median, 5,402.68 ms p99/max**, with 6/8 frontier-capped.
+The old sample's worst was 6,269 ms, so the tail improved, but the median did
+not improve over its roughly 2.93 s predecessor. This is not paradoxical:
+reverse traversal remains one serial read per frontier node, and the frontier
+cap still drives almost the same number of round trips (1,252 across these
+eight probes); fewer returned edges reduce result processing but do not remove
+the per-read latency. The open issue remains an engine/read-shape constraint,
+with a better worst case but no median improvement in this sample.

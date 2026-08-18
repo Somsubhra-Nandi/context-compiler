@@ -106,7 +106,8 @@ Once registered, in any Claude Code session:
 > it does, then explain what build_filter is doing.
 
 Claude resolves the seeds, calls `compile_context`, and answers from the
-returned declarations and bodies — 24 symbols, ~6,100 tokens, one tool call.
+returned declarations and bodies — 22 symbols, 4,368 tokens (4,715 budgeted),
+one tool call.
 See `docs/spikes/mcp-item-7-results.md` for the verbatim transcript and two
 more (`explain_inclusion`, `impact_cone`).
 

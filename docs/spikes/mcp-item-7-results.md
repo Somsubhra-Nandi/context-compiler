@@ -1,5 +1,9 @@
 # Item 7 — MCP Server: Results
 
+**Superseded in part by Amendment A6.** Figures in this document were
+measured before the `occurrence_nodes()` containment fix. See
+`docs/specs/amendment-a6.md` for current values.
+
 HydraDB `0.1.0`, commit `259c5cb` (Amendment A4 landed, Item 6 re-validated).
 Python 3.14.4, `neo4j` 6.2.0, `mcp` 2.0.0, Claude Code `2.1.233`, Ubuntu 26.04
 under WSL2. Data is the same post-A4 Django extraction Items 6/A4 validated

@@ -1,5 +1,9 @@
 # Item 6 — Emission: Results
 
+**Superseded in part by Amendment A6.** Figures in this document were
+measured before the `occurrence_nodes()` containment fix. See
+`docs/specs/amendment-a6.md` for current values.
+
 HydraDB `0.1.0`, commit `6a2fbb192f37f51a93690a2ae2d2f5e27e6e4219`. Python 3.14.4,
 `neo4j` 6.2.0, Ubuntu 26.04 under WSL2. Django re-extracted with the A2.2 cap and
 the three extraction fixes in §7, then re-ingested — so every figure here is
