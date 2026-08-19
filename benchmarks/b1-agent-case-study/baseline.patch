@@ -1,0 +1,22 @@
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index 0ea9be6..5d69965 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -2166,13 +2166,15 @@ class Query(BaseExpression):
+ 
+         if contains_louter:
+             or_null_condition, _ = self.build_filter(
+-                ("%s__isnull" % trimmed_prefix, True),
++                ("%s__isnull" % trimmed_prefix, False),
+                 current_negated=True,
+                 branch_negated=True,
+                 can_reuse=can_reuse,
+             )
+-            condition.add(or_null_condition, OR)
++            condition.add(or_null_condition, AND)
+             # Note that the end result will be:
++            #   NOT (EXISTS (inner_q) AND outercol IS NOT NULL)
++            # which is equivalent to:
+             #   NOT EXISTS (inner_q) OR outercol IS NULL
+             # this might look crazy but due to how NULL works, this seems to be
+             # correct. If the IS NULL check is removed, then if outercol
