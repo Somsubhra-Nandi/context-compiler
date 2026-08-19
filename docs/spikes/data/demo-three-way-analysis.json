@@ -1,0 +1,286 @@
+{
+  "methodology": {
+    "three_way_source": "docs/spikes/data/demo-three-way.json",
+    "three_way_source_sha256": "0840ff9689a76c0eb373c9f1a86145b2abed2bae15a947d2457a6f760d1a64e8",
+    "compiler_hint_source": "docs/spikes/data/demo-side-by-side.json",
+    "compiler_hint_source_sha256": "a4e7f4d055c0e2f78ca2e96ea8e6be0f50e475616e9242a97365c40363a16fde",
+    "rank_definition": "one-based global Arm A rank among non-seed symbols; descending cosine similarity, then ascending node ID",
+    "classification": "A named identity is reached if emitted as L2/L3 or named as a mandatory identity-only reference."
+  },
+  "compiler_structural_hint_set": [
+    "django.db.models.constants.LOOKUP_SEP",
+    "django.db.models.expressions.Exists",
+    "django.db.models.expressions.OuterRef",
+    "django.db.models.expressions.Ref",
+    "django.db.models.expressions.ResolvedOuterRef",
+    "django.db.models.query.QuerySet._clone",
+    "django.db.models.query_utils.Q",
+    "django.db.models.query_utils.check_rel_lookup_compatibility",
+    "django.db.models.query_utils.refs_expression",
+    "django.db.models.sql.query.JoinPromoter",
+    "django.db.models.sql.query.Query.add_filter",
+    "django.db.models.sql.query.Query.add_q",
+    "django.db.models.sql.query.Query.bump_prefix",
+    "django.db.models.sql.query.Query.check_query_object_type",
+    "django.db.models.sql.query.Query.clear_ordering",
+    "django.db.models.sql.query.Query.join",
+    "django.db.models.sql.query.Query.names_to_path",
+    "django.db.models.sql.query.Query.ref_alias",
+    "django.db.models.sql.query.Query.trim_start",
+    "django.db.models.sql.query.Query.try_transform",
+    "django.db.models.sql.query.Query.unref_alias",
+    "django.db.utils.NotSupportedError"
+  ],
+  "compiler_complete_named_identity_set": [
+    "django.db.models.constants.LOOKUP_SEP",
+    "django.db.models.expressions.Exists",
+    "django.db.models.expressions.Expression",
+    "django.db.models.expressions.OuterRef",
+    "django.db.models.expressions.Ref",
+    "django.db.models.expressions.ResolvedOuterRef",
+    "django.db.models.query.QuerySet._clone",
+    "django.db.models.query_utils.Q",
+    "django.db.models.query_utils.check_rel_lookup_compatibility",
+    "django.db.models.query_utils.refs_expression",
+    "django.db.models.sql.query.JoinPromoter",
+    "django.db.models.sql.query.Query.add_filter",
+    "django.db.models.sql.query.Query.add_q",
+    "django.db.models.sql.query.Query.bump_prefix",
+    "django.db.models.sql.query.Query.check_query_object_type",
+    "django.db.models.sql.query.Query.clear_ordering",
+    "django.db.models.sql.query.Query.join",
+    "django.db.models.sql.query.Query.names_to_path",
+    "django.db.models.sql.query.Query.ref_alias",
+    "django.db.models.sql.query.Query.trim_start",
+    "django.db.models.sql.query.Query.try_transform",
+    "django.db.models.sql.query.Query.unref_alias",
+    "django.db.utils.NotSupportedError",
+    "django.utils.tree.Node"
+  ],
+  "compiler_hint_overlap_22": {
+    "arm_a_vector": {
+      "named_set_size": 22,
+      "reached_total": 2,
+      "overlap_fraction": "2/22",
+      "overlap_percent": 9.1,
+      "emitted": [
+        "django.db.models.sql.query.Query.add_filter",
+        "django.db.models.sql.query.Query.add_q"
+      ],
+      "identity_only": [],
+      "missed": [
+        "django.db.models.constants.LOOKUP_SEP",
+        "django.db.models.expressions.Exists",
+        "django.db.models.expressions.OuterRef",
+        "django.db.models.expressions.Ref",
+        "django.db.models.expressions.ResolvedOuterRef",
+        "django.db.models.query.QuerySet._clone",
+        "django.db.models.query_utils.Q",
+        "django.db.models.query_utils.check_rel_lookup_compatibility",
+        "django.db.models.query_utils.refs_expression",
+        "django.db.models.sql.query.JoinPromoter",
+        "django.db.models.sql.query.Query.bump_prefix",
+        "django.db.models.sql.query.Query.check_query_object_type",
+        "django.db.models.sql.query.Query.clear_ordering",
+        "django.db.models.sql.query.Query.join",
+        "django.db.models.sql.query.Query.names_to_path",
+        "django.db.models.sql.query.Query.ref_alias",
+        "django.db.models.sql.query.Query.trim_start",
+        "django.db.models.sql.query.Query.try_transform",
+        "django.db.models.sql.query.Query.unref_alias",
+        "django.db.utils.NotSupportedError"
+      ]
+    },
+    "arm_b_graph_top_k": {
+      "named_set_size": 22,
+      "reached_total": 0,
+      "overlap_fraction": "0/22",
+      "overlap_percent": 0.0,
+      "emitted": [],
+      "identity_only": [],
+      "missed": [
+        "django.db.models.constants.LOOKUP_SEP",
+        "django.db.models.expressions.Exists",
+        "django.db.models.expressions.OuterRef",
+        "django.db.models.expressions.Ref",
+        "django.db.models.expressions.ResolvedOuterRef",
+        "django.db.models.query.QuerySet._clone",
+        "django.db.models.query_utils.Q",
+        "django.db.models.query_utils.check_rel_lookup_compatibility",
+        "django.db.models.query_utils.refs_expression",
+        "django.db.models.sql.query.JoinPromoter",
+        "django.db.models.sql.query.Query.add_filter",
+        "django.db.models.sql.query.Query.add_q",
+        "django.db.models.sql.query.Query.bump_prefix",
+        "django.db.models.sql.query.Query.check_query_object_type",
+        "django.db.models.sql.query.Query.clear_ordering",
+        "django.db.models.sql.query.Query.join",
+        "django.db.models.sql.query.Query.names_to_path",
+        "django.db.models.sql.query.Query.ref_alias",
+        "django.db.models.sql.query.Query.trim_start",
+        "django.db.models.sql.query.Query.try_transform",
+        "django.db.models.sql.query.Query.unref_alias",
+        "django.db.utils.NotSupportedError"
+      ]
+    }
+  },
+  "compiler_named_identity_overlap_24": {
+    "arm_a_vector": {
+      "named_set_size": 24,
+      "reached_total": 3,
+      "overlap_fraction": "3/24",
+      "overlap_percent": 12.5,
+      "emitted": [
+        "django.db.models.sql.query.Query.add_filter",
+        "django.db.models.sql.query.Query.add_q"
+      ],
+      "identity_only": [
+        "django.utils.tree.Node"
+      ],
+      "missed": [
+        "django.db.models.constants.LOOKUP_SEP",
+        "django.db.models.expressions.Exists",
+        "django.db.models.expressions.Expression",
+        "django.db.models.expressions.OuterRef",
+        "django.db.models.expressions.Ref",
+        "django.db.models.expressions.ResolvedOuterRef",
+        "django.db.models.query.QuerySet._clone",
+        "django.db.models.query_utils.Q",
+        "django.db.models.query_utils.check_rel_lookup_compatibility",
+        "django.db.models.query_utils.refs_expression",
+        "django.db.models.sql.query.JoinPromoter",
+        "django.db.models.sql.query.Query.bump_prefix",
+        "django.db.models.sql.query.Query.check_query_object_type",
+        "django.db.models.sql.query.Query.clear_ordering",
+        "django.db.models.sql.query.Query.join",
+        "django.db.models.sql.query.Query.names_to_path",
+        "django.db.models.sql.query.Query.ref_alias",
+        "django.db.models.sql.query.Query.trim_start",
+        "django.db.models.sql.query.Query.try_transform",
+        "django.db.models.sql.query.Query.unref_alias",
+        "django.db.utils.NotSupportedError"
+      ]
+    },
+    "arm_b_graph_top_k": {
+      "named_set_size": 24,
+      "reached_total": 2,
+      "overlap_fraction": "2/24",
+      "overlap_percent": 8.3,
+      "emitted": [],
+      "identity_only": [
+        "django.db.models.expressions.Expression",
+        "django.utils.tree.Node"
+      ],
+      "missed": [
+        "django.db.models.constants.LOOKUP_SEP",
+        "django.db.models.expressions.Exists",
+        "django.db.models.expressions.OuterRef",
+        "django.db.models.expressions.Ref",
+        "django.db.models.expressions.ResolvedOuterRef",
+        "django.db.models.query.QuerySet._clone",
+        "django.db.models.query_utils.Q",
+        "django.db.models.query_utils.check_rel_lookup_compatibility",
+        "django.db.models.query_utils.refs_expression",
+        "django.db.models.sql.query.JoinPromoter",
+        "django.db.models.sql.query.Query.add_filter",
+        "django.db.models.sql.query.Query.add_q",
+        "django.db.models.sql.query.Query.bump_prefix",
+        "django.db.models.sql.query.Query.check_query_object_type",
+        "django.db.models.sql.query.Query.clear_ordering",
+        "django.db.models.sql.query.Query.join",
+        "django.db.models.sql.query.Query.names_to_path",
+        "django.db.models.sql.query.Query.ref_alias",
+        "django.db.models.sql.query.Query.trim_start",
+        "django.db.models.sql.query.Query.try_transform",
+        "django.db.models.sql.query.Query.unref_alias",
+        "django.db.utils.NotSupportedError"
+      ]
+    }
+  },
+  "selected_vector_ranks": [
+    {
+      "fqn": "django.db.models.sql.query.Query.add_filter",
+      "rank": 4,
+      "cosine_similarity": 0.84259218,
+      "admitted": true,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.sql.query.Query.add_q",
+      "rank": 14,
+      "cosine_similarity": 0.775868356,
+      "admitted": true,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.query_utils.Q",
+      "rank": 94,
+      "cosine_similarity": 0.673452079,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.expressions.Exists",
+      "rank": 105,
+      "cosine_similarity": 0.669396043,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.query.QuerySet._clone",
+      "rank": 117,
+      "cosine_similarity": 0.666398287,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.sql.query.Query.trim_start",
+      "rank": 147,
+      "cosine_similarity": 0.650148928,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.sql.query.JoinPromoter",
+      "rank": 159,
+      "cosine_similarity": 0.645414114,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.expressions.OuterRef",
+      "rank": 838,
+      "cosine_similarity": 0.567592978,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.expressions.ResolvedOuterRef",
+      "rank": 967,
+      "cosine_similarity": 0.560026526,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.expressions.Ref",
+      "rank": 1150,
+      "cosine_similarity": 0.549880862,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.sql.query.Query.names_to_path",
+      "rank": 1272,
+      "cosine_similarity": 0.542760491,
+      "admitted": false,
+      "identity_only": false
+    },
+    {
+      "fqn": "django.db.models.constants.LOOKUP_SEP",
+      "rank": 40772,
+      "cosine_similarity": 0.151826426,
+      "admitted": false,
+      "identity_only": false
+    }
+  ]
+}
