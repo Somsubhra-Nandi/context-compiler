@@ -139,11 +139,57 @@ Aggregate compiler measurements from the corrected six-seed Django run: 200 dete
 
 “Emitted symbols” are L2/L3 code blocks. A context may also name L1 identities: FQN plus file/line hints for symbols needed to interpret emitted code but not emitted as declarations or bodies. Mandatory identities are budgeted and never truncated; optional identity hints use a reserve and may be truncated. The mandatory floor in this run was median 21 emitted symbols / 3,718.5 tokens; packing brought that to median 34 / 5,602.
 
-## Controlled comparison: structural compiler vs graph-ranked top-k
+## Controlled comparison: vector, graph top-k, and structural compiler
 
-Arm B is a controlled graph-ranked top-k retriever: it ranks a one-hop neighborhood using the same graph scorer but does not run structural closure, profile propagation, or closure-bundle packing. It is not a vector or embedding baseline.
+Arm A is a frozen global vector baseline using one normalized
+`repr_L2_text` embedding per symbol from
+`jinaai/jina-embeddings-v2-base-code` at revision
+`516f4baf13dec4ddddda8631e019b5737c8bc250`. It ranks all non-seed symbols by
+cosine similarity to the mean seed vector and greedily admits them without a
+graph or structural closure. Arm B ranks a one-hop graph neighborhood without
+structural closure, profile propagation, or closure-bundle packing. Arm C is
+the full structural compiler.
 
-The canonical checked-in traceback side-by-side artifact for `QuerySet.filter → _filter_or_exclude → Query.build_filter` emitted nearly the same amount of code: 26 symbols and 4,674 actual tokens (5,048 budgeted) for the compiler, versus 27 symbols and 4,271 actual tokens (4,716 budgeted) for Arm B. The compiler additionally supplied 22 identity hints and named 24 identities in total, versus 0 hints and 2 named identities for Arm B; the compiler context satisfied structural closure while Arm B's independent `is_closed()` check was false. See [`docs/spikes/demo-side-by-side.md`](docs/spikes/demo-side-by-side.md) and its [measurement JSON](docs/spikes/data/demo-side-by-side.json).
+The canonical 8k traceback example uses the same resolved
+`QuerySet.filter → QuerySet._filter_or_exclude → Query.build_filter` seeds,
+budget, and emitter for all three arms:
+
+| Measure | Arm A — Vector | Arm B — Graph top-k | Arm C — Context Compiler |
+|---|---:|---:|---:|
+| Emitted symbols | 58 | 27 | 26 |
+| Actual emitted tokens | 7,308 | 4,271 | 4,674 |
+| Budgeted tokens | 7,996 | 4,716 | 5,048 |
+| Utilization | 99.95% | 58.95% | 63.10% |
+| Overlap with compiler structural hints | 2/22 | 0/22 | 22/22 by construction |
+| Structural identity hints exposed | 0 | 0 | 22 |
+
+The separate frozen Arm A run covered 200 deterministic six-seed trials with
+the canonical Arm B seed lists verified ID-for-ID. All 200 returned `OK`, with
+zero actual or budgeted overruns; median vector retrieval was 43.267 ms and
+median total Arm A processing was 1,338.907 ms. One-time embedding/index
+construction is reported separately in the three-way evidence.
+
+The 22 compiler hints are not independent ground-truth labels. Arm C's 22/22
+is true by construction, so compiler-hint overlap is a descriptive diagnostic,
+not an accuracy or correctness benchmark. In this example Arm A nearly fills
+the token ceiling, while Arm C stops once its structural slice has been
+selected: budget is a ceiling, not a target, and utilization alone is not a
+quality measure.
+
+One diagnostic connects this comparison to the independently existing B1 case
+study: `django.db.models.sql.query.Query.trim_start`, the upstream regression
+location repaired by the successful Compiler arm, ranked 147th globally by
+vector similarity but was not admitted into Arm A's 8,000-token context. Arm C
+surfaced it as an identity hint. This describes retrieval and packing in the
+frozen example; it does not show that vectors cannot find `trim_start` or that
+vector search is universally inferior.
+
+See the [three-way evidence](docs/spikes/demo-three-way.md), its
+[generated output](docs/spikes/data/demo-three-way.json), and the
+[deterministic overlap/rank analysis](docs/spikes/data/demo-three-way-analysis.json).
+The earlier canonical [Arm B/C comparison](docs/spikes/demo-side-by-side.md)
+and [measurement JSON](docs/spikes/data/demo-side-by-side.json) remain available
+unchanged.
 
 ## Agent case study: root-cause correctness
 
@@ -189,7 +235,7 @@ These are checks on the compiled artifact and cost model. They do not guarantee 
 - Natural-language seed resolution is weaker than explicit symbol seeds; arbitrary prose may resolve poorly or fail. So this remains as future work.
 - Candidate supply can be the binding constraint: the aggregate run had roughly 12.0 candidates and 11.0 admissions at the median.
 - B1 is a single controlled case study (`n = 1`), not a statistically significant benchmark or token-efficiency estimate.
-- No vector-top-k performance claim is made. An attempted pinned CodeBERT setup did not complete within the experiment time limit, so vector-baseline measurements remain future work; this is not a claim about vector search itself.
+- An earlier exploratory pinned CodeBERT setup did not complete within its experiment time limit. It has been superseded by the completed frozen Jina Arm A vector baseline. The three-way result compares retrieval objectives on this corpus; it is not a claim that vector search is universally inferior.
 - Current evidence is primarily Python/Django. Graph quality depends on extractor coverage, symbol resolution, and edge quality.
 
 ## Development / tests
@@ -201,7 +247,7 @@ python -m pytest tests/unit tests/mcp -q
 python -m pytest tests/graph -q
 ```
 
-Useful validation scripts include `scripts/validate_budget_django.py`, `scripts/validate_closure_django.py`, `scripts/validate_emit_django.py`, `scripts/validate_baseline_arm_b.py`, `scripts/demo_side_by_side.py`, and `scripts/capture_demo_side_by_side.py`.
+Useful validation scripts include `scripts/validate_budget_django.py`, `scripts/validate_closure_django.py`, `scripts/validate_emit_django.py`, `scripts/validate_baseline_arm_a.py`, `scripts/validate_baseline_arm_b.py`, `scripts/demo_three_way.py`, `scripts/demo_side_by_side.py`, and `scripts/capture_demo_side_by_side.py`.
 
 ## Repository evidence / docs
 
@@ -211,5 +257,6 @@ Useful validation scripts include `scripts/validate_budget_django.py`, `scripts/
 - [MCP evidence](docs/spikes/mcp-item-7-results.md)
 - [Arm B aggregate results](docs/spikes/baseline-arm-b-results.md)
 - [Arm B side-by-side example](docs/spikes/baseline-arm-b-example.md)
+- [Three-way vector / graph top-k / structural compiler evidence](docs/spikes/demo-three-way.md)
 - [B1 agent case study](benchmarks/b1-agent-case-study/RESULT.md)
 - [B1 Compiler patch](benchmarks/b1-agent-case-study/compiler.patch) and [baseline patch](benchmarks/b1-agent-case-study/baseline.patch)

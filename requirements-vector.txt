@@ -1,0 +1,5 @@
+# Optional, reproducible Arm A vector-index build environment.
+# Torch is intentionally absent: the execution host supplies torch 2.11.0+cu128.
+numpy==2.2.3
+sentence-transformers==3.4.1
+transformers==4.49.0
