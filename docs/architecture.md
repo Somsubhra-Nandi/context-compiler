@@ -1,7 +1,8 @@
 # Context Compiler architecture
 
-Context Compiler compares three retrieval strategies behind a shared context
-output and agent/evaluation flow.
+The repository evaluates three retrieval strategies behind a shared context
+output and agent/evaluation flow. Arm C is the Context Compiler production
+path; Arms A and B are controlled baselines.
 
 ```mermaid
 flowchart TB
@@ -11,13 +12,17 @@ flowchart TB
         seeds["Explicit symbol seeds"]
     end
 
-    subgraph Data["Shared data sources"]
+    subgraph Build["Offline build"]
         direction LR
-        symbols["Symbol sidecar"]
-        edges["Edge sidecar"]
-        offsets["Offsets / source mapping"]
-        embeddings["Embedding index"]
+        symbols["symbols.jsonl / repr_L2_text"]
+        edges["edges.jsonl"]
+        vector_build["Embedding / index build"]
+        ingest["HydraDB ingest"]
+        embedding_index["Embedding index"]
         graph["HydraDB graph"]
+        symbols --> vector_build --> embedding_index
+        symbols --> ingest
+        edges --> ingest --> graph
     end
 
     subgraph Paths["Retrieval / compilation paths"]
@@ -36,6 +41,7 @@ flowchart TB
     end
 
     output["Rendered context<br/>Token-budgeted output<br/>Identity hints / metadata"]
+    source_map["Source / offset mapping"]
 
     subgraph Agent["Agent / evaluation layer"]
         direction LR
@@ -50,15 +56,10 @@ flowchart TB
     seeds --> arm_b
     seeds --> resolve
 
-    symbols -.-> arm_a
-    symbols -.-> arm_b
-    symbols -.-> resolve
-    edges -.-> arm_b
-    edges -.-> expand
-    offsets -.-> output
-    embeddings --> arm_a
+    embedding_index --> arm_a
     graph --> arm_b
     graph --> expand
+    source_map -.-> output
 
     arm_a --> output
     arm_b --> output
@@ -67,8 +68,8 @@ flowchart TB
 ```
 
 Arm A accepts caller-resolved symbol seeds and uses the embedding index without
-graph traversal. Arm B ranks a one-hop graph neighborhood but does not enforce
-structural closure. Arm C resolves task text or explicit seeds, compiles a
-structurally closed graph slice, and packs it under the token budget. The shared
-emitter then produces the context consumed by the coding agent and evaluation
-flow.
+graph traversal. Arm B ranks a one-hop HydraDB graph neighborhood but does not
+enforce structural closure. Arm C is the production Context Compiler path: it
+resolves task text or explicit seeds, compiles a structurally closed graph slice,
+and packs it under the token budget. The shared emitter then produces the
+context consumed by the coding agent and evaluation flow.

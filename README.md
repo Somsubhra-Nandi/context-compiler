@@ -35,7 +35,9 @@ The extractor writes symbol and relationship sidecars; HydraDB stores the graph;
 ## Architecture
 
 See the [high-level architecture diagram](docs/architecture.md) for the input,
-retrieval, data, output, and agent/evaluation flow at a glance.
+retrieval, data, output, and agent/evaluation flow at a glance. Arm C is the
+production Context Compiler path; Arms A and B are experimental controlled
+baselines used for comparison.
 
 - **Extractor and sidecars.** `context_compiler.extract` combines Python syntax analysis with symbol resolution and writes `symbols.jsonl`, `edges.jsonl`, and an offset index. Canonical L2 declarations and L3 bodies, references, token counts, and source locations are stored for later use.
 - **HydraDB.** `context_compiler.graph.ingest` loads symbols and typed relationships into a Neo4j-compatible HydraDB graph. The compiler reads forward edges for mandatory propagation and reverse `CALLS` neighborhoods for optional candidates.
