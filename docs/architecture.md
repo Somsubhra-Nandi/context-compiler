@@ -19,10 +19,11 @@ flowchart TB
         vector_build["Embedding / index build"]
         ingest["HydraDB ingest"]
         embedding_index["Embedding index"]
-        graph["HydraDB graph"]
+        hydradb_graph["HydraDB graph"]
         symbols --> vector_build --> embedding_index
         symbols --> ingest
-        edges --> ingest --> graph
+        edges --> ingest
+        ingest --> hydradb_graph
     end
 
     subgraph Paths["Retrieval / compilation paths"]
@@ -57,8 +58,8 @@ flowchart TB
     seeds --> resolve
 
     embedding_index --> arm_a
-    graph --> arm_b
-    graph --> expand
+    hydradb_graph --> arm_b
+    hydradb_graph --> expand
     source_map -.-> output
 
     arm_a --> output
