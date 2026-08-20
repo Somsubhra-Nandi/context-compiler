@@ -1,0 +1,21 @@
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index 0ea9be6..791324a 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -2165,13 +2165,14 @@ class Query(BaseExpression):
+         condition, needed_inner = self.build_filter(Exists(query))
+ 
+         if contains_louter:
++            nullable_prefix = filter_rhs is not None
+             or_null_condition, _ = self.build_filter(
+-                ("%s__isnull" % trimmed_prefix, True),
++                ("%s__isnull" % trimmed_prefix, not nullable_prefix),
+                 current_negated=True,
+                 branch_negated=True,
+                 can_reuse=can_reuse,
+             )
+-            condition.add(or_null_condition, OR)
++            condition.add(or_null_condition, AND if nullable_prefix else OR)
+             # Note that the end result will be:
+             #   NOT EXISTS (inner_q) OR outercol IS NULL
+             # this might look crazy but due to how NULL works, this seems to be

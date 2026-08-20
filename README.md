@@ -193,7 +193,7 @@ unchanged.
 
 ## Agent case study: root-cause correctness
 
-[benchmarks/b1-agent-case-study/RESULT.md](benchmarks/b1-agent-case-study/RESULT.md) is a controlled agent case study (`n = 1`), not an aggregate benchmark. Both arms used the same broken Django fixture, natural-language bug report, project instructions, model (`gpt-5.6-luna`), reasoning level (`low`), and Codex CLI (`0.147.0`). Context Compiler was available only in the Compiler arm.
+[benchmarks/b1-agent-case-study/RESULT.md](benchmarks/b1-agent-case-study/RESULT.md) is a controlled agent case study (`n = 1`), not an aggregate benchmark. All three primary conditions used the same broken Django fixture, natural-language bug report, project instructions, model (`gpt-5.6-luna`), reasoning level (`low`), and Codex CLI (`0.147.0`).
 
 The final clean Compiler run independently selected:
 
@@ -212,16 +212,27 @@ With an 8,000-token budget it returned P3 FULL: 32 emitted symbols, closure size
 
 These figures are from the final clean rerun, which supersedes an earlier exploratory Compiler run whose worktree was reset before its patch artifact was preserved.
 
-The focused regression passed and `Queries6Tests` passed 9/9 for both arms. Full-suite results were: Compiler — 505 tests run, 0 failures; 14 skipped, 1 expected failure. Baseline — 505 tests run, 3 failures; 14 skipped, 1 expected failure. The baseline agent made a downstream `Query.split_exclude()` boolean rewrite; its failures were `ExcludeTests.test_exclude_m2m_through`, `ManyToManyExcludeTest.test_exclude_many_to_many`, and `ManyToManyExcludeTest.test_ticket_12823`.
+The focused regression passed and `Queries6Tests` passed 9/9 in all primary conditions.
+
+| Condition | Repair location | Full `queries` suite |
+|---|---|---|
+| Context Compiler | upstream `Query.trim_start()` invariant repair | 505 tests, **0 failures** |
+| Vector-enabled | downstream `Query.split_exclude()` repair | 505 tests, **2 failures** |
+| Baseline | downstream `Query.split_exclude()` repair | 505 tests, **3 failures** |
+
+The Vector-enabled failures were `ExcludeTests.test_exclude_m2m_through` and `ManyToManyExcludeTest.test_ticket_12823`. The Baseline failures were those two plus `ManyToManyExcludeTest.test_exclude_many_to_many`.
+
+In the vector-enabled run, the vector MCP was available but was not invoked by the agent; the retrieval-level Arm A results are reported separately in the controlled [three-way benchmark](docs/spikes/demo-three-way.md).
 
 The original expectation was that structural retrieval might reduce agent search/token consumption. B1 did not support that prediction: the Compiler arm consumed **more total Codex tokens**, 38,949 versus 18,564 for baseline. The observed separation was correctness:
 
 ```text
 Compiler: upstream trim_start invariant repair → 505 tests run, 0 failures
+Vector-enabled: downstream split_exclude repair → 505 tests run, 2 failures (vector MCP not invoked)
 Baseline: downstream split_exclude symptom repair → 505 tests run, 3 failures
 ```
 
-Reasoning-output tokens were lower in the Compiler arm (174 vs 566), but this single trial is not evidence of a general reasoning-efficiency claim. See the [Compiler patch](benchmarks/b1-agent-case-study/compiler.patch) and [baseline patch](benchmarks/b1-agent-case-study/baseline.patch).
+Reasoning-output tokens were lower in the Compiler arm (174 vs 566), but this single trial is not evidence of a general reasoning-efficiency claim. The vector-enabled condition used 67,506 total tokens and 1,733 reasoning tokens; it is likewise `n = 1` and does not support token-efficiency claims. See the [Compiler patch](benchmarks/b1-agent-case-study/compiler.patch), [vector-enabled patch](benchmarks/b1-agent-case-study/vector-enabled.patch), and [baseline patch](benchmarks/b1-agent-case-study/baseline.patch).
 
 ## Guarantees / invariants
 
@@ -259,4 +270,4 @@ Useful validation scripts include `scripts/validate_budget_django.py`, `scripts/
 - [Arm B side-by-side example](docs/spikes/baseline-arm-b-example.md)
 - [Three-way vector / graph top-k / structural compiler evidence](docs/spikes/demo-three-way.md)
 - [B1 agent case study](benchmarks/b1-agent-case-study/RESULT.md)
-- [B1 Compiler patch](benchmarks/b1-agent-case-study/compiler.patch) and [baseline patch](benchmarks/b1-agent-case-study/baseline.patch)
+- [B1 Compiler patch](benchmarks/b1-agent-case-study/compiler.patch), [vector-enabled patch](benchmarks/b1-agent-case-study/vector-enabled.patch), and [baseline patch](benchmarks/b1-agent-case-study/baseline.patch)
