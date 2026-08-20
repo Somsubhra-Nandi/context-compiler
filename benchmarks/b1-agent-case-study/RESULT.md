@@ -32,15 +32,15 @@ Broken fixture commit:
 
 ## Controlled Setup
 
-Both arms used:
+All primary conditions used:
 
     Model: gpt-5.6-luna
     Reasoning effort: low
     Codex CLI: 0.147.0
 
-Both arms started from the same broken commit and received the same natural-language user task.
+All primary conditions started from the same broken commit and received the same natural-language user task.
 
-Both arms used the same project-level agent workflow instructions:
+All primary conditions used the same project-level agent workflow instructions:
 
     AGENTS.md SHA256:
     0f309d5bb7b54bef8552ac675a5bcd588af16082acb3b71feec38bc22d0592a8
@@ -50,7 +50,7 @@ The workflow instructed the agent to perform minimal initial localization, ident
 - use Context Compiler with explicit symbol seeds if available;
 - otherwise continue normal repository investigation from the same localized path.
 
-Context Compiler was enabled only in the Compiler arm.
+Context Compiler was enabled only in the Compiler arm. The vector-only MCP was available only in the Vector-enabled arm; the baseline had no retrieval MCP.
 
 Repository isolation rules prohibited using sibling worktrees, other checkouts, Git history, or another repository to locate the regression.
 
@@ -136,6 +136,63 @@ Full `queries` suite:
 
 ---
 
+## Vector-enabled Arm
+
+Context Compiler was absent. The vector-only MCP was available.
+
+### Retrieval Behavior and Diagnosis
+
+The agent performed ordinary repository exploration and did not invoke the vector MCP. It localized the problem downstream in `Query.split_exclude()` and produced a nullable-prefix-specific boolean rewrite.
+
+### Patch
+
+The preserved agent patch changes the NULL predicate and connector only when the filter right-hand side is nullable:
+
+    + nullable_prefix = filter_rhs is not None
+    - ("%s__isnull" % trimmed_prefix, True)
+    + ("%s__isnull" % trimmed_prefix, not nullable_prefix)
+
+    - condition.add(or_null_condition, OR)
+    + condition.add(or_null_condition, AND if nullable_prefix else OR)
+
+Patch artifact:
+
+[`vector-enabled.patch`](vector-enabled.patch)
+
+### Verification
+
+Focused regression test:
+
+    PASS
+
+Entire `Queries6Tests` class:
+
+    9 / 9 PASS
+
+Full `queries` suite, rerun single-process:
+
+    505 tests run
+    2 failures
+    14 skipped
+    1 expected failure
+
+Failures:
+
+    queries.tests.ExcludeTests.test_exclude_m2m_through
+    queries.tests.ManyToManyExcludeTest.test_ticket_12823
+
+The patch fixed the narrow symptom but still changed exclusion semantics elsewhere.
+
+### Codex Token Usage
+
+    Total: 67,506
+    Input: 63,585
+    Cached input: 402,944
+    Output: 3,921
+    Reasoning output: 1,733
+
+---
+
 ## Baseline Arm
 
 Context Compiler was disabled.
@@ -199,20 +256,21 @@ The baseline patch therefore fixed the reported symptom but changed exclusion se
 
 ---
 
-## Side-by-Side Result
+## Primary Comparison
 
-| Metric | Context Compiler | Baseline |
-|---|---:|---:|
-| Focused regression | PASS | PASS |
-| Nearby `Queries6Tests` | 9 / 9 PASS | 9 / 9 PASS |
-| Full `queries` suite | 505 tests, 0 failures | 505 tests, 3 failures |
-| Root-cause location | `Query.trim_start()` | `Query.split_exclude()` |
-| Patch shape | 1-line invariant repair | downstream boolean rewrite |
-| Codex total tokens | 38,949 | 18,564 |
-| Codex reasoning tokens | 174 | 566 |
-| Context Compiler profile | P3 FULL | N/A |
-| Compiled context | 6,659 tokens | N/A |
-| Compiler latency | 1,312.1 ms | N/A |
+| Condition | Retrieval behavior | Repair location | Focused / `Queries6Tests` | Full `queries` suite |
+|---|---|---|---|---|
+| Context Compiler | MCP invoked | `Query.trim_start()` | PASS / 9 / 9 PASS | 505 tests, **0 failures** |
+| Vector-enabled | Vector MCP available, not invoked | `Query.split_exclude()` | PASS / 9 / 9 PASS | 505 tests, **2 failures** |
+| Baseline | No retrieval MCP | `Query.split_exclude()` | PASS / 9 / 9 PASS | 505 tests, **3 failures** |
+
+| Usage / retrieval metric | Context Compiler | Vector-enabled | Baseline |
+|---|---:|---:|---:|
+| Codex total tokens | 38,949 | 67,506 | 18,564 |
+| Codex reasoning tokens | 174 | 1,733 | 566 |
+| Retrieval profile | P3 FULL | Vector MCP available, not invoked | N/A |
+| Compiled context | 6,659 tokens | N/A | N/A |
+| Compiler latency | 1,312.1 ms | N/A | N/A |
 
 ## Prediction vs. Observation
 
@@ -220,11 +278,11 @@ The initial expectation was that structural retrieval would primarily reduce age
 
 That prediction was not supported by this case study.
 
-The Context Compiler arm consumed more total Codex tokens:
+The Context Compiler arm consumed more total Codex tokens than the baseline:
 
     38,949 vs. 18,564
 
-The baseline therefore did not fail because it consumed more context or more total tokens.
+The baseline therefore did not fail because it consumed more context or more total tokens. The vector-enabled condition also cannot support a token-efficiency claim: it is one trial, and the vector MCP was not invoked.
 
 Instead, the observed separation was correctness.
 
@@ -232,23 +290,25 @@ The compiler-guided agent reached the upstream `Query.trim_start()` invariant an
 
 The baseline agent produced a plausible downstream `Query.split_exclude()` workaround that passed the reported regression and all nine nearby tests, but introduced three regressions under broader verification.
 
-Reasoning-output tokens moved in the opposite direction from total tokens:
+Reasoning-output tokens moved in the opposite direction from total tokens for the Compiler and Baseline arms:
 
     Context Compiler: 174
     Baseline: 566
 
-This single trial is not sufficient to claim a general reasoning-token reduction.
+This single trial is not sufficient to claim a general reasoning-token reduction, and no reasoning-token comparison should be generalized from these primary conditions.
 
 ## Finding
 
 For B1, the demonstrated benefit of Context Compiler is **root-cause correctness and regression avoidance**, not token efficiency.
 
-Both agents could make the reported failing test pass.
+All primary conditions could make the reported failing test pass.
 
 Only broader verification exposed the difference:
 
     Context Compiler → upstream invariant repair → 0 regressions
     Baseline         → downstream symptom repair → 3 regressions
+
+The vector-enabled result is a product/tool-use observation, not evidence about the result of applying vector context: the vector MCP was available but not invoked. The controlled retrieval-level comparison is reported separately in [the three-way vector / graph top-k / structural compiler evidence](../../docs/spikes/demo-three-way.md).
 
 Because this is an `n = 1` controlled case study, it should be presented as illustrative agent evidence rather than combined with the project's larger-sample compiler statistics.
 
@@ -257,6 +317,8 @@ Because this is an `n = 1` controlled case study, it should be presented as illu
 The final Compiler patch was captured directly from the clean Codex run before the worktree was reset or modified.
 
 The interactive Compiler session was recorded during the clean run and retained locally as provenance; the raw terminal transcript is not checked into this repository.
+
+A later forced-call exploratory run failed exact-FQN resolution before returning vector context and is excluded from the primary comparison.
 
 The generated Compiler patch was captured directly after that run and is checked in as [`compiler.patch`](compiler.patch).
 
